@@ -1,0 +1,44 @@
+name: multi_window_app
+description: >
+  Two-window (Admin + Customer) Flutter desktop POC. Designed to run on
+  macOS during development and on Linux / Raspberry Pi 5 with two HDMI
+  displays in production, unchanged.
+publish_to: 'none'
+version: 0.1.0+1
+
+# A broad, unpinned lower bound. Desktop multi-window plugins move fast, so
+# rather than hard-pinning an exact Flutter/Dart version, just make sure you
+# are on a current stable channel: `flutter channel stable && flutter upgrade`.
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Creates and manages additional native OS windows, each backed by its own
+  # Flutter engine, and provides WindowMethodChannel for talking between
+  # them. This is the actively-maintained community package that fills the
+  # gap until Flutter's own native multi-window support (in progress,
+  # stewarded by Canonical for desktop/Linux) reaches stable.
+  desktop_multi_window: ^0.3.0
+
+  # Lets us control size/position/decorations/fullscreen of "this" window
+  # from inside its own engine. Works together with desktop_multi_window:
+  # each sub-window uses window_manager, from within its own main(), to
+  # size and place itself.
+  window_manager: ^0.5.1
+
+  # Reports the physical monitors attached to the machine (position, size,
+  # scale factor). This is how we detect "one display" (dev machine) vs.
+  # "two displays" (Raspberry Pi with dual HDMI) and decide where to place
+  # each window.
+  screen_retriever: ^0.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
