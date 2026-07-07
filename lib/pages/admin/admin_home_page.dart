@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/messaging_service.dart';
 import '../../services/window_service.dart';
+import '../../widgets/keyboard_text_field.dart';
 import 'admin_settings_page.dart';
 
 /// Admin window — Home page.
@@ -61,7 +62,10 @@ class _AdminHomePageState extends State<AdminHomePage> {
               style: TextStyle(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
-            TextField(
+            // KeyboardTextField shows a CustomKeyboard beneath itself while
+            // focused — needed on the Raspberry Pi kiosk build, which has a
+            // touchscreen but no physical keyboard attached.
+            KeyboardTextField(
               controller: _textController,
               decoration: const InputDecoration(
                 border: OutlineInputBorder(),

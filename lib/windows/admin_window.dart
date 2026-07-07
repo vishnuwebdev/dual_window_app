@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../pages/admin/admin_home_page.dart';
+import '../widgets/keyboard_host.dart';
 
 /// The root widget for the Admin window's engine.
 ///
@@ -26,6 +27,9 @@ class AdminWindowApp extends StatelessWidget {
       ),
       debugShowCheckedModeBanner: false,
       home: const AdminHomePage(),
+      // Mounts the shared on-screen keyboard once, above every route this
+      // window's Navigator ever pushes — see KeyboardHost's doc comment.
+      builder: (context, child) => KeyboardHost(child: child ?? const SizedBox()),
     );
   }
 }
