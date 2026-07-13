@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/material.dart';
 
+import 'core/config/config_service.dart';
+import 'core/mock/mock_kiosk_repository.dart';
+import 'core/registration/unit_registration_service.dart';
 import 'models/window_type.dart';
 import 'services/messaging_service.dart';
 import 'services/window_service.dart';
@@ -29,6 +32,24 @@ Future<void> main(List<String> args) async {
 
   final windowController = await WindowController.fromCurrentEngine();
   final role = WindowArgs.decode(windowController.arguments).role;
+
+  // Every window's own engine needs `config.json` loaded before any page
+  // reads the admin PIN, drop-off PIN, SMS template, or locker mapping.
+  await ConfigService().initialize();
+
+  // Likewise, load `db.json` (the drop-off/collection parcel records)
+  // before any page reads or writes items — mirrors the Android app's
+  // `DbService` reading `db.json` on startup. Must come after
+  // `ConfigService().initialize()` since building `MockKioskRepository`
+  // syncs its locker list from `ConfigService.lockerMapping`.
+  await MockKioskRepository.instance.initialize();
+
+  // Load any existing unit registration (auth.json) before any admin page
+  // reads UnitRegistrationService.isRegistered/username — see
+  // core/registration/unit_registration_service.dart. Cheap local file
+  // read only (no network), so it's safe to await here like the two
+  // services above.
+  await UnitRegistrationService.instance.initialize();
 
   switch (role) {
     case AppWindowRole.admin:

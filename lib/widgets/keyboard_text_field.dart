@@ -7,8 +7,10 @@ import 'virtual_keyboard_controller.dart';
 /// releases it again on blur or when "Done" is tapped.
 ///
 /// Drop-in replacement for `TextField` on touch kiosks with no physical
-/// keyboard attached (see `AdminHomePage` for the intended usage). Requires
-/// a `KeyboardHost` to be mounted somewhere above it in the tree — every
+/// keyboard attached — see `KioskTextField` (built on top of this widget)
+/// for the phone/PIN fields used throughout `lib/pages/`, and
+/// `ConfigurationPage` for a plain, non-kiosk-styled usage. Requires a
+/// `KeyboardHost` to be mounted somewhere above it in the tree — every
 /// window's `MaterialApp` in this app provides one via `builder:`.
 class KeyboardTextField extends StatefulWidget {
   const KeyboardTextField({
@@ -17,12 +19,27 @@ class KeyboardTextField extends StatefulWidget {
     this.decoration,
     this.onSubmitted,
     this.style,
+    this.obscureText = false,
+    this.maxLines = 1,
+    this.minLines,
   });
 
   final TextEditingController controller;
   final InputDecoration? decoration;
   final ValueChanged<String>? onSubmitted;
   final TextStyle? style;
+
+  /// Masks input as dots — used for PIN/password fields (Verify PIN, PIN
+  /// Reset, Admin Login, Admin Reset). Defaults to `false` so plain-text
+  /// call sites (e.g. `ConfigurationPage`'s address field) are unaffected.
+  final bool obscureText;
+
+  /// Set both above 1 (e.g. via [KioskTextField]'s textarea mode) for a
+  /// multi-line field — the on-screen keyboard's "Done" key still submits
+  /// rather than inserting a newline, since `CustomKeyboard` has no
+  /// dedicated newline key.
+  final int maxLines;
+  final int? minLines;
 
   @override
   State<KeyboardTextField> createState() => _KeyboardTextFieldState();
@@ -111,6 +128,15 @@ class _KeyboardTextFieldState extends State<KeyboardTextField> {
       focusNode: _focusNode,
       decoration: widget.decoration,
       style: widget.style,
+      obscureText: widget.obscureText,
+      maxLines: widget.maxLines,
+      minLines: widget.minLines,
+      // Without this, `TextField` top-aligns its text whenever it's given
+      // more height than the text needs — which every `KioskTextField` pill
+      // does (it's taller than a single line of text so the shadow "frame"
+      // shows evenly around it). Multi-line fields keep the natural
+      // top-alignment instead, since that's how a textarea should read.
+      textAlignVertical: widget.maxLines == 1 ? TextAlignVertical.center : TextAlignVertical.top,
       // Flutter desktop never auto-shows a software keyboard on its own,
       // so there's nothing to suppress here — CustomKeyboard (via
       // KeyboardHost) is purely additive, and hardware-keyboard typing

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:screen_retriever/screen_retriever.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../core/config/config_service.dart';
 import '../models/window_type.dart';
 
 /// Everything related to *creating* and *placing* native OS windows lives
@@ -63,15 +64,18 @@ class WindowService {
     await windowManager.waitUntilReadyToShow(options, () async {
       await windowManager.setPosition(placement.position);
 
-      // --- RASPBERRY PI KIOSK MODE (commented out for development) ------
-      // On the Pi you will almost certainly want each window to fill its
-      // entire HDMI output with no title bar, e.g.:
-      //
-      //   await windowManager.setAsFrameless();
-      //   await windowManager.setFullScreen(true);
-      //
-      // It's left off here so that, during development on macOS, you can
-      // still see window chrome and drag/resize windows freely.
+      // --- RASPBERRY PI KIOSK MODE ---------------------------------------
+      // Each window fills its entire HDMI output with no title bar when
+      // `ConfigService.kioskMode` is on (see the Configuration page's
+      // "Kiosk mode" switch, or set `"kiosk_mode": true` directly in
+      // config.json). Off by default so day-to-day development on
+      // macOS/Windows/Linux desktop still gets normal window chrome you can
+      // drag/resize freely. `ConfigService().initialize()` has already run
+      // by the time this is called — see `main.dart`.
+      if (ConfigService().kioskMode) {
+        await windowManager.setAsFrameless();
+        await windowManager.setFullScreen(true);
+      }
 
       await windowManager.show();
       await windowManager.focus();
