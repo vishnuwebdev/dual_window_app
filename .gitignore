@@ -1,12 +1,12 @@
 # Local runtime config — admin-editable settings (admin PIN, drop-off PIN,
 # SMS template, locker mapping), created with defaults by ConfigService on
 # first launch. Mirrors the Android app's on-device `admin.json`.
-config.json
+# config.json
 
 # Local runtime data — parcel drop-off/collection records, created (empty)
 # by MockKioskRepository on first launch. Mirrors the Android app's
 # on-device `db.json`.
-db.json
+# db.json
 
 # Flutter build directories
 build/

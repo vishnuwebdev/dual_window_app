@@ -1,0 +1,34 @@
+{
+  "admin_pin": "12345",
+  "drop_off_pin": "12345",
+  "sms_template": "Your PackVault collection PIN is {pin}. Thank you for using PackVault.",
+  "locker_mapping": [
+    {
+      "id": 1,
+      "size": "small"
+    },
+    {
+      "id": 2,
+      "size": "small"
+    },
+    {
+      "id": 3,
+      "size": "medium"
+    },
+    {
+      "id": 4,
+      "size": "medium"
+    },
+    {
+      "id": 5,
+      "size": "large"
+    },
+    {
+      "id": 6,
+      "size": "large"
+    }
+  ],
+  "locker_address": "10.0.2.2:7890",
+  "locker_backend": "grpc",
+  "kiosk_mode": false
+}
