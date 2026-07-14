@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../config/config_service.dart';
 import '../utilities/logging.dart';
 
 /// Registers this unit with VaultGroup's cloud platform, ported from
@@ -177,6 +178,63 @@ class UnitRegistrationService extends ChangeNotifier {
     } catch (e) {
       logger.w('refreshJwt request failed: $e');
       return false;
+    }
+  }
+
+  /// Copies the just-written `auth.json`/`mq.json` into the *physical
+  /// unit's* real cvmain config directory (`ConfigService.cvmainConfigDir`)
+  /// so cvmain itself — not this app — actually has the new identity to
+  /// use once it's restarted.
+  ///
+  /// Why this exists: on Android, `auth.json`/`mq.json` are written
+  /// straight into cvmain's own sandboxed directory because cvmain (native
+  /// code bundled in-process with the app) is what opens the MQTT session
+  /// that VaultGroup's dashboard shows as "online". This desktop app is a
+  /// *separate* process from cvmain, so writing to its own directory (see
+  /// the class doc comment) has zero effect on cvmain's actual MQTT
+  /// connection — the unit will never show online no matter how many
+  /// times you register here, unless cvmain itself gets these files.
+  ///
+  /// This only copies the files — it does **not** restart cvmain. cvmain
+  /// only re-reads its config on process start (confirmed from its
+  /// `run_cvmain.sh` supervisor script), so after this call succeeds you
+  /// still need to restart it yourself, e.g. over SSH:
+  /// ```
+  /// sudo pkill -f cvmain_rs
+  /// ```
+  /// Its supervisor loop relaunches it within a few seconds with the
+  /// files just written here. Deliberately manual, not automated by this
+  /// app — see the `ConfigService.cvmainConfigDir` doc comment.
+  ///
+  /// Returns a human-readable status string for display, or `null` if
+  /// skipped because [ConfigService.cvmainConfigDir] isn't set.
+  Future<String?> mirrorToCvmainConfig() async {
+    final dir = ConfigService().cvmainConfigDir;
+    if (dir.isEmpty) return null;
+
+    try {
+      if (!await _authFile.exists() || !await _mqFile.exists()) {
+        return 'Register the unit first — no local auth.json/mq.json to mirror yet.';
+      }
+
+      final destAuth = File('$dir/auth.json');
+      await destAuth.parent.create(recursive: true);
+      await destAuth.writeAsString(await _authFile.readAsString());
+
+      // Confirmed layout on a real unit: mq.json lives in an `mq`
+      // subdirectory, not flat alongside auth.json — see
+      // `ConfigService.cvmainConfigDir`'s doc comment.
+      final destMq = File('$dir/mq/mq.json');
+      await destMq.parent.create(recursive: true);
+      await destMq.writeAsString(await _mqFile.readAsString());
+
+      logger.i('Mirrored auth.json/mq.json to cvmain config dir: $dir');
+      return 'Copied auth.json/mq.json to $dir. cvmain still needs a '
+          'manual restart to pick them up (sudo pkill -f cvmain_rs over SSH).';
+    } catch (e) {
+      logger.w('Failed to mirror registration files to $dir: $e');
+      return 'Could not write to "$dir" — check the path exists and this '
+          'app has permission to write there. ($e)';
     }
   }
 

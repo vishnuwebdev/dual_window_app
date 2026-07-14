@@ -71,6 +71,7 @@ class ConfigService extends ChangeNotifier {
   static const String _kLockerAddress = 'locker_address';
   static const String _kLockerBackend = 'locker_backend';
   static const String _kKioskMode = 'kiosk_mode';
+  static const String _kCvmainConfigDir = 'cvmain_config_dir';
 
   static const String _defaultAdminPin = '12345';
   static const String _defaultDropOffPin = '12345';
@@ -93,6 +94,16 @@ class ConfigService extends ChangeNotifier {
   /// `cvmain` both use. See `core/grpc/locker_grpc_service.dart`.
   static const String _defaultLockerBackend = 'mock';
   static const Set<String> _validLockerBackends = {'mock', 'grpc'};
+
+  /// The real cvmain config directory, confirmed by SSHing into this
+  /// deployment's physical unit and running `find / -iname "auth.json"`
+  /// (see `UnitRegistrationService.mirrorToCvmainConfig`'s doc comment).
+  /// Used as the actual default now — not just a placeholder — since this
+  /// app only targets this one known Pi deployment (cvmain +
+  /// multi-window-app, no Android app involved). Still editable via the
+  /// Unit Registration page if a different unit ever uses a different
+  /// path.
+  static const String _defaultCvmainConfigDir = '/home/pi/cv/cvmain/config';
 
   /// Off by default so a developer running on macOS/Windows/Linux desktop
   /// still gets normal window chrome and can drag/resize windows freely.
@@ -120,6 +131,8 @@ class ConfigService extends ChangeNotifier {
   String _lockerAddress = _defaultLockerAddress;
   String _lockerBackend = _defaultLockerBackend;
   bool _kioskMode = _defaultKioskMode;
+
+  String _cvmainConfigDir = _defaultCvmainConfigDir;
 
   StreamSubscription<FileSystemEvent>? _watchSubscription;
 
@@ -184,15 +197,17 @@ class ConfigService extends ChangeNotifier {
         _dropOffPin = json[_kDropOffPin] as String? ?? _defaultDropOffPin;
         _smsTemplate = json[_kSmsTemplate] as String? ?? _defaultSmsTemplate;
         _lockerAddress = json[_kLockerAddress] as String? ?? _defaultLockerAddress;
+        _cvmainConfigDir = json[_kCvmainConfigDir] as String? ?? _defaultCvmainConfigDir;
 
-        var needsRewrite = json.length != 7 ||
+        var needsRewrite = json.length != 8 ||
             !json.containsKey(_kAdminPin) ||
             !json.containsKey(_kDropOffPin) ||
             !json.containsKey(_kSmsTemplate) ||
             !json.containsKey(_kLockerMapping) ||
             !json.containsKey(_kLockerAddress) ||
             !json.containsKey(_kLockerBackend) ||
-            !json.containsKey(_kKioskMode);
+            !json.containsKey(_kKioskMode) ||
+            !json.containsKey(_kCvmainConfigDir);
 
         final rawKioskMode = json[_kKioskMode];
         _kioskMode = rawKioskMode is bool ? rawKioskMode : _defaultKioskMode;
@@ -252,6 +267,7 @@ class ConfigService extends ChangeNotifier {
       _kLockerAddress: _lockerAddress,
       _kLockerBackend: _lockerBackend,
       _kKioskMode: _kioskMode,
+      _kCvmainConfigDir: _cvmainConfigDir,
     }));
     notifyListeners();
   }
@@ -491,6 +507,31 @@ class ConfigService extends ChangeNotifier {
     logger.i('Kiosk mode updated to: $value');
   }
 
+  /// The real, on-disk directory the *physical unit's* `cvmain` process
+  /// reads `auth.json`/`mq.json` from (with `mq.json` in an `mq`
+  /// subdirectory: `<dir>/mq/mq.json`). Defaults to
+  /// [_defaultCvmainConfigDir] (`/home/pi/cv/cvmain/config`) — confirmed
+  /// by SSHing into this deployment's actual unit, not a guess, since this
+  /// app only targets that one known Pi. Still editable on the Unit
+  /// Registration page (clear the field to blank to skip mirroring
+  /// entirely) in case a future unit uses a different path.
+  ///
+  /// This is a different concept from [lockerAddress]: that's where the
+  /// *gRPC* server is (already required for any locker control); this is
+  /// where cvmain's *own config files* live on that same machine's
+  /// filesystem (only needed for the unit to show "online" in
+  /// VaultGroup — see the Unit Registration page). Restarting cvmain so
+  /// it actually picks up a freshly-mirrored file is a manual step done
+  /// over SSH (`sudo pkill -f cvmain_rs` — its supervisor script relaunches
+  /// it within a few seconds) — deliberately not automated by this app.
+  String get cvmainConfigDir => _cvmainConfigDir;
+
+  Future<void> setCvmainConfigDir(String value) async {
+    _cvmainConfigDir = value.trim();
+    await _persistConfig();
+    logger.i('cvmain config directory updated to: "$_cvmainConfigDir"');
+  }
+
   /// Reset all configuration to defaults
   Future<void> reset() async {
     _adminPin = _defaultAdminPin;
@@ -500,6 +541,7 @@ class ConfigService extends ChangeNotifier {
     _lockerAddress = _defaultLockerAddress;
     _lockerBackend = _defaultLockerBackend;
     _kioskMode = _defaultKioskMode;
+    _cvmainConfigDir = _defaultCvmainConfigDir;
     await _persistConfig();
     logger.i('ConfigService reset to defaults');
   }

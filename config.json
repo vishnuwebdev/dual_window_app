@@ -30,5 +30,6 @@
   ],
   "locker_address": "10.0.2.2:7890",
   "locker_backend": "grpc",
-  "kiosk_mode": false
+  "kiosk_mode": false,
+  "cvmain_config_dir": "/home/pi/cv/cvmain/config"
 }

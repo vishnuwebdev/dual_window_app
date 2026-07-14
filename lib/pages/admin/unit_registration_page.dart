@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/config/config_service.dart';
 import '../../core/registration/unit_registration_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../widgets/admin_section_card.dart';
@@ -13,6 +14,16 @@ import '../../widgets/keyboard_text_field.dart';
 /// cloud and establish the identity audit events are relayed under — see
 /// `core/registration/unit_registration_service.dart` for the full flow
 /// and `LockerGrpcService.userAudit` for what actually sends those events.
+///
+/// Also surfaces the "physical unit sync" step (mirroring
+/// `auth.json`/`mq.json` into the real `cvmain` config directory — see
+/// `UnitRegistrationService.mirrorToCvmainConfig`), since registering
+/// *this app* alone has no effect on whether the unit shows "online" on
+/// VaultGroup's dashboard — that's driven entirely by cvmain's own MQTT
+/// session on the physical unit. Restarting cvmain itself is deliberately
+/// left as a manual SSH step (`sudo pkill -f cvmain_rs`) rather than
+/// something this app automates — see the doc comment on
+/// `mirrorToCvmainConfig` for why.
 ///
 /// Uses the same navy/teal/Metropolis "admin chrome"
 /// (`AdminSectionCard`/`AdminTextStyles`/`AdminInputStyle`) as
@@ -28,27 +39,61 @@ class UnitRegistrationPage extends StatefulWidget {
 class _UnitRegistrationPageState extends State<UnitRegistrationPage> {
   final _codeController = TextEditingController();
   final _service = UnitRegistrationService.instance;
+  final _config = ConfigService();
+
+  late final TextEditingController _cvmainDirController;
+
   String? _resultMessage;
   bool _resultIsError = false;
   bool _refreshingJwt = false;
+  bool _mirroring = false;
+  String? _syncSavedMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _cvmainDirController = TextEditingController(text: _config.cvmainConfigDir);
+  }
 
   @override
   void dispose() {
     _codeController.dispose();
+    _cvmainDirController.dispose();
     super.dispose();
   }
 
   Future<void> _register() async {
     final error = await _service.registerWithCode(_codeController.text);
     if (!mounted) return;
+
+    if (error != null) {
+      setState(() {
+        _resultIsError = true;
+        _resultMessage = error;
+      });
+      return;
+    }
+
+    _codeController.clear();
+    final buffer = StringBuffer(
+      'Registered as "${_service.username}". mq.json has been written — '
+      'audit events sent via LockerGrpcService.userAudit will now be '
+      'relayed under this unit\'s identity.',
+    );
+
+    // Auto-mirror to the physical unit's cvmain config dir right after a
+    // successful registration, same as the Android flow does it in one
+    // pass — but only if the admin has actually configured the directory
+    // below; otherwise this is a no-op. Restarting cvmain is still a
+    // manual step (see the "Physical unit sync" card below).
+    final mirrorResult = await _service.mirrorToCvmainConfig();
+    if (mirrorResult != null) buffer.write('\n\n$mirrorResult');
+
+    if (!mounted) return;
     setState(() {
-      _resultIsError = error != null;
-      _resultMessage = error ??
-          'Registered as "${_service.username}". mq.json has been '
-              'written — audit events sent via LockerGrpcService.userAudit '
-              'will now be relayed under this unit\'s identity.';
+      _resultIsError = false;
+      _resultMessage = buffer.toString();
     });
-    if (error == null) _codeController.clear();
   }
 
   Future<void> _refreshJwt() async {
@@ -73,6 +118,26 @@ class _UnitRegistrationPageState extends State<UnitRegistrationPage> {
           'removed — this does not deregister the unit on the platform '
           'itself.';
       _resultIsError = false;
+    });
+  }
+
+  Future<void> _saveSyncSettings() async {
+    await _config.setCvmainConfigDir(_cvmainDirController.text);
+    if (!mounted) return;
+    setState(() {
+      _syncSavedMessage = 'Saved.';
+    });
+  }
+
+  Future<void> _mirrorNow() async {
+    await _saveSyncSettings();
+    setState(() => _mirroring = true);
+    final result = await _service.mirrorToCvmainConfig();
+    if (!mounted) return;
+    setState(() {
+      _mirroring = false;
+      _syncSavedMessage = result ??
+          'cvmain config directory is blank above — nothing to mirror.';
     });
   }
 
@@ -225,6 +290,93 @@ class _UnitRegistrationPageState extends State<UnitRegistrationPage> {
                 ),
               ),
             ],
+            const SizedBox(height: 24),
+            AdminSectionCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text('Physical unit sync', style: AdminTextStyles.sectionTitle),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Registering above only updates this app\'s own copy of '
+                    'auth.json/mq.json — it does NOT make the physical '
+                    'unit show "online" on VaultGroup by itself. This app '
+                    'copies those files into cvmain\'s real config folder '
+                    'automatically after each registration (plain file '
+                    'copy, no special permissions needed) — the directory '
+                    'below is already set to this unit\'s confirmed path; '
+                    'only change it if you\'re pointing at a different '
+                    'unit, or clear it to skip mirroring entirely.',
+                    style: AdminTextStyles.body,
+                  ),
+                  const SizedBox(height: 14),
+                  const Text('cvmain config directory on the unit', style: AdminTextStyles.sectionTitle),
+                  const SizedBox(height: 8),
+                  KeyboardTextField(
+                    controller: _cvmainDirController,
+                    style: AdminTextStyles.fieldInput,
+                    decoration: AdminInputStyle.fieldDecoration(
+                      hint: 'e.g. /home/pi/cv/cvmain/config — leave blank to skip',
+                    ),
+                    onSubmitted: (_) => _saveSyncSettings(),
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.adminFieldFill,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.panelBorder),
+                    ),
+                    child: const Text(
+                      'After the files are copied, cvmain still needs a '
+                      'restart to actually pick them up — that\'s a manual '
+                      'step, on purpose. Over SSH:\n\n'
+                      '  sudo pkill -f cvmain_rs\n\n'
+                      'Its supervisor script relaunches it within a few '
+                      'seconds with the new credentials. Check '
+                      'cv/cvmain/logs/cvmain.log to confirm, then check '
+                      'VaultGroup\'s dashboard.',
+                      style: TextStyle(fontFamily: 'Metropolis', fontSize: 12, color: Colors.white70),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          style: AdminInputStyle.outlinedButton,
+                          onPressed: _mirroring ? null : _mirrorNow,
+                          icon: _mirroring
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.teal),
+                                )
+                              : const Icon(Icons.drive_file_move_outline),
+                          label: const Text('Mirror now'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: OutlinedButton(
+                          style: AdminInputStyle.outlinedButton,
+                          onPressed: _saveSyncSettings,
+                          child: const Text('Save directory'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_syncSavedMessage != null) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      _syncSavedMessage!,
+                      style: const TextStyle(fontFamily: 'Metropolis', color: Colors.white70),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ],
         ),
       ),
