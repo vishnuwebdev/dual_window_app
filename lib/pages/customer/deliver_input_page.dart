@@ -25,6 +25,17 @@ class _DeliverInputPageState extends State<DeliverInputPage>
   void initState() {
     super.initState();
     startInactivityTimer();
+    // Pre-fill "+27" on both fields — see the matching comment in
+    // `collection_input_page.dart` for why (no '+' key on the on-screen
+    // keyboard at all).
+    if (!_repo.isGlobal) {
+      const prefilled = TextEditingValue(
+        text: '+27',
+        selection: TextSelection.collapsed(offset: 3),
+      );
+      _phoneController.value = prefilled;
+      _repeatController.value = prefilled;
+    }
   }
 
   @override
@@ -40,17 +51,27 @@ class _DeliverInputPageState extends State<DeliverInputPage>
   }
 
   void _handleContinue() {
-    final phone = _phoneController.text.trim();
-    final repeat = _repeatController.text.trim();
+    final rawPhone = _phoneController.text.trim();
+    final rawRepeat = _repeatController.text.trim();
 
-    if (phone.isEmpty) {
+    if (rawPhone.isEmpty) {
       setState(() => _errorText = 'Phone number cannot be empty');
       return;
     }
-    if (repeat.isEmpty) {
+    if (rawRepeat.isEmpty) {
       setState(() => _errorText = 'Please repeat your cell phone number');
       return;
     }
+
+    // Normalize both before comparing — not the raw text. Otherwise two
+    // entries of the *same* number that happen to be typed slightly
+    // differently (e.g. "0821234567" in one field, "821234567" — without
+    // the leading 0 — in the other, both valid after the pre-filled
+    // "+27") would be flagged as a mismatch even though they're identical
+    // once normalized.
+    final phone = MockKioskRepository.normalizeToSouthAfrica(rawPhone);
+    final repeat = MockKioskRepository.normalizeToSouthAfrica(rawRepeat);
+
     if (phone != repeat) {
       setState(
           () => _errorText = 'The number you have entered does not match.');
@@ -62,11 +83,10 @@ class _DeliverInputPageState extends State<DeliverInputPage>
       return;
     }
 
-    final normalized = MockKioskRepository.normalizeToSouthAfrica(phone);
     stopInactivityTimer();
     Navigator.of(context).push(
       MaterialPageRoute(
-          builder: (_) => DeliverLockerSelectPage(phone: normalized)),
+          builder: (_) => DeliverLockerSelectPage(phone: phone)),
     );
   }
 

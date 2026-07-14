@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import '../config/config_service.dart';
 import '../grpc/locker_grpc_service.dart';
 import '../utilities/logging.dart';
+import '../utilities/phone_utils.dart';
 import 'models.dart';
 
 /// Stand-in for everything the Android app persisted to SharedPreferences /
@@ -74,6 +75,13 @@ class MockKioskRepository extends ChangeNotifier {
   final _random = Random();
   bool _initialized = false;
   StreamSubscription<FileSystemEvent>? _watchSubscription;
+
+  /// Flat/global locker id -> which paired-board pair (and local door
+  /// number within that pair) it came from. Only populated when
+  /// `ConfigService.pairedLockerMode` is true; empty otherwise. Rebuilt
+  /// alongside `_lockers` in `_syncLockersFromConfig` — see
+  /// `_grpcLockerNumber`, which is the only thing that reads this.
+  final Map<int, ({int pairIndex, int localId})> _pairLocationByLockerId = {};
 
   /// Mirrors `sharedPreferences["isGlobal"]` — switches phone validation
   /// between South-Africa-only and any-country mode.
@@ -223,21 +231,93 @@ class MockKioskRepository extends ChangeNotifier {
     );
   }
 
-  /// Rebuilds `_lockers` from `ConfigService.lockerMapping` — called once
-  /// at construction and again every time an admin saves a new mapping in
-  /// `ConfigurationPage`. Any in-flight parcel `Item`s whose locker no
-  /// longer exists after the change are dropped, so the app never shows a
-  /// phantom "occupied" locker that isn't part of the current mapping.
+  /// Rebuilds `_lockers` from `ConfigService.lockerMapping` (or
+  /// `ConfigService.lockerPairs`, in paired mode — see
+  /// `ConfigService.pairedLockerMode`) — called once at construction and
+  /// again every time an admin saves a new mapping in `ConfigurationPage`.
+  /// Any in-flight parcel `Item`s whose locker no longer exists after the
+  /// change are dropped, so the app never shows a phantom "occupied"
+  /// locker that isn't part of the current mapping.
   void _syncLockersFromConfig() {
-    _lockers = ConfigService()
-        .lockerMapping
-        .map((entry) => Locker(id: entry.id, size: _parseSize(entry.size)))
-        .toList();
+    final config = ConfigService();
+    _pairLocationByLockerId.clear();
+
+    if (config.pairedLockerMode && config.lockerPairs.isNotEmpty) {
+      // Flatten every pair's local doors into the same kind of sequential
+      // flat id list `lockerMapping` would produce — this is what lets
+      // every existing occupancy method (`getFreeLockers`, `isLockerFree`,
+      // `addItem`, etc.) keep working completely unchanged: a "logical
+      // locker" is still just one flat id, it just now also has a
+      // drop-off-board door and a collection-board door behind it (see
+      // `_grpcLockerNumber`). The *drop-off* side's size is used for the
+      // flat `Locker.size` since that's the side customers actually pick
+      // a size against.
+      final lockers = <Locker>[];
+      var flatId = 1;
+      final pairs = config.lockerPairs;
+      for (var pairIndex = 0; pairIndex < pairs.length; pairIndex++) {
+        for (final entry in pairs[pairIndex].lockers) {
+          lockers.add(Locker(id: flatId, size: _parseSize(entry.dropoffSize)));
+          _pairLocationByLockerId[flatId] =
+              (pairIndex: pairIndex, localId: entry.localId);
+          flatId++;
+        }
+      }
+      _lockers = lockers;
+    } else {
+      _lockers = config.lockerMapping
+          .map((entry) => Locker(id: entry.id, size: _parseSize(entry.size)))
+          .toList();
+    }
 
     final validIds = _lockers.map((l) => l.id).toSet();
     _items.removeWhere((item) => !validIds.contains(item.lockerId));
 
     notifyListeners();
+  }
+
+  /// Computes the real gRPC `locker_num` for a flat/logical [lockerId] on
+  /// a specific physical door, per `ConfigService.pairedLockerMode`'s
+  /// topology: pair 0's drop-off/collection boards are gRPC's global
+  /// boards 1/2, pair 1's are boards 3/4, and so on — each pair
+  /// contributes exactly two boards, always in `[dropoff, collection]`
+  /// order, to the single flat 1..num_lockers numbering the proto uses
+  /// (see `protos/service.proto`'s `LockRequest.locker_num` comment: "The
+  /// first locker is always 1," global across every slave board, not
+  /// reset per board).
+  ///
+  /// Outside paired mode (or if [lockerId] isn't in the pair lookup for
+  /// any reason), this is the identity function — [lockerId] itself is
+  /// already the direct gRPC locker number, matching today's behavior.
+  int _grpcLockerNumber(int lockerId, {required bool forCollectionSide}) {
+    if (!ConfigService().isGrpcBackend) return lockerId;
+    if (!ConfigService().pairedLockerMode) return lockerId;
+
+    final location = _pairLocationByLockerId[lockerId];
+    if (location == null) {
+      // Shouldn't happen (every _lockers entry gets a location when
+      // paired mode built it) — fall back to the flat id rather than
+      // throwing, since guessing wrong here means unlocking a real door.
+      logger.w(
+        'MockKioskRepository: no pair location for locker $lockerId in '
+        'paired mode — falling back to flat id as the gRPC locker_num.',
+      );
+      return lockerId;
+    }
+
+    final pairs = ConfigService().lockerPairs;
+    var boardOffset = 0;
+    for (var i = 0; i < location.pairIndex; i++) {
+      // Each earlier pair contributes two boards (dropoff + collection),
+      // both the same door count within that pair.
+      boardOffset += 2 * pairs[i].lockers.length;
+    }
+    if (forCollectionSide) {
+      // Skip past this pair's own drop-off board to land on its
+      // collection board.
+      boardOffset += pairs[location.pairIndex].lockers.length;
+    }
+    return boardOffset + location.localId;
   }
 
   static LockerSize _parseSize(String size) {
@@ -281,16 +361,24 @@ class MockKioskRepository extends ChangeNotifier {
 
   List<LockerItem> getAllItems() => List.unmodifiable(_items);
 
+  /// Normalizes [phone] before comparing — defensive, in case a caller
+  /// somewhere forgot to normalize first. Safe to do unconditionally since
+  /// [normalizeToSouthAfrica] is idempotent (never adds a second "+27").
   List<LockerItem> itemsForPhone(String phone) {
-    return _items.where((i) => i.phone == phone).toList();
+    final normalized = normalizeToSouthAfrica(phone);
+    return _items.where((i) => i.phone == normalized).toList();
   }
 
   LockerItem addItem({required String phone, required int lockerId}) {
+    // Same defensive normalization as `itemsForPhone` — every item this
+    // repository ever stores has a canonical "+27..." phone, regardless
+    // of what the caller passed in.
+    final normalizedPhone = normalizeToSouthAfrica(phone);
     // Mirrors DeliverPlaceParcelActivity: if this phone already has a
     // parcel, reuse the same PIN rather than issuing a new one.
-    final existing = _items.firstWhereOrNull((i) => i.phone == phone);
+    final existing = _items.firstWhereOrNull((i) => i.phone == normalizedPhone);
     final item = LockerItem(
-      phone: phone,
+      phone: normalizedPhone,
       pin: existing?.pin ?? _generateRandomPin(),
       lockerId: lockerId,
       creationDate: DateTime.now(),
@@ -299,6 +387,10 @@ class MockKioskRepository extends ChangeNotifier {
     _persistItems();
     // Mirrors `DbService.addItem` -> `openLocker(item.lockerId)`: physically
     // unlock the assigned locker so the customer can place their parcel.
+    // In paired mode this is always the *drop-off*-side door — the
+    // matching collection-side door stays locked until someone actually
+    // collects (see `removeItems`), even though both doors now count as
+    // occupied for the same logical locker.
     _unlockPhysicalLocker(lockerId);
     notifyListeners();
     return item;
@@ -309,8 +401,12 @@ class MockKioskRepository extends ChangeNotifier {
     _persistItems();
     // Mirrors `DbService.removeItem` -> `openLocker(item.lockerId)`: open
     // every collected item's locker so the customer can take their parcel.
+    // In paired mode this opens the *collection*-side door — the parcel
+    // was physically placed behind the drop-off board, but the paired
+    // collection board covers the same cavity from the other side (see
+    // the class doc comment on `ConfigService.lockerPairs`).
     for (final item in items) {
-      _unlockPhysicalLocker(item.lockerId);
+      _unlockPhysicalLocker(item.lockerId, forCollectionSide: true);
     }
     notifyListeners();
   }
@@ -318,7 +414,8 @@ class MockKioskRepository extends ChangeNotifier {
   /// Mirrors `HelpActivity`'s "resend PIN via SMS" — succeeds only if the
   /// phone number has at least one parcel waiting.
   bool resendSms(String phone) {
-    return _items.any((i) => i.phone == phone);
+    final normalized = normalizeToSouthAfrica(phone);
+    return _items.any((i) => i.phone == normalized);
   }
 
   String _generateRandomPin() {
@@ -332,38 +429,103 @@ class MockKioskRepository extends ChangeNotifier {
   /// [clearLocker]): "Open" just unlocks the door, "Clear" additionally
   /// removes the parcel record. No-op in `'mock'` mode besides the log
   /// line, same as every other physical action here.
-  void openLockerOnly(int lockerId) {
-    _unlockPhysicalLocker(lockerId);
+  ///
+  /// [forCollectionSide] lets the Admin Override table's per-door rows
+  /// (see [getAdminDoorRows]) open one specific physical door in paired
+  /// mode; ignored outside paired mode.
+  void openLockerOnly(int lockerId, {bool forCollectionSide = false}) {
+    _unlockPhysicalLocker(lockerId, forCollectionSide: forCollectionSide);
   }
 
   /// Force-clears a locker's contents without a customer PIN — mirrors
-  /// Admin Override's "Clear" action.
+  /// Admin Override's "Clear" action. In paired mode this opens *both*
+  /// physical doors: an admin clearing a stuck locker doesn't necessarily
+  /// know whether the parcel is still sitting behind the drop-off side or
+  /// was already partially retrieved from the collection side, and
+  /// "Clear" is meant to fully reset the pair either way.
   void clearLocker(int lockerId) {
     _items.removeWhere((i) => i.lockerId == lockerId);
     _persistItems();
     // Mirrors `openLockerWithAdminLogs`: admin override forces the door
     // open regardless of whether a parcel record existed for it.
     _unlockPhysicalLocker(lockerId);
+    if (ConfigService().pairedLockerMode) {
+      _unlockPhysicalLocker(lockerId, forCollectionSide: true);
+    }
     notifyListeners();
   }
 
   void clearAllLockers() {
     final lockerIds = _lockers.map((l) => l.id).toList();
+    final paired = ConfigService().pairedLockerMode;
     _items.clear();
     _persistItems();
-    // Mirrors `openLockersSequentially`: opens every configured locker.
+    // Mirrors `openLockersSequentially`: opens every configured locker —
+    // both physical doors of every pair when in paired mode (see
+    // `clearLocker`'s doc comment for why).
     for (final lockerId in lockerIds) {
       _unlockPhysicalLocker(lockerId);
+      if (paired) {
+        _unlockPhysicalLocker(lockerId, forCollectionSide: true);
+      }
     }
     notifyListeners();
+  }
+
+  /// Rows for the Admin Override table (see `AdminOverridePage`). Outside
+  /// paired mode this is exactly [getAllLockers] — one row per locker.
+  /// In paired mode, every logical locker produces *two* rows, one per
+  /// physical door (drop-off side and collection side), per the confirmed
+  /// requirement that admins see and control each physical door
+  /// separately even though they share one occupancy state.
+  List<AdminDoorRow> getAdminDoorRows() {
+    final paired = ConfigService().pairedLockerMode;
+    final rows = <AdminDoorRow>[];
+    for (final locker in _lockers) {
+      final occupied = !isLockerFree(locker.id);
+      if (!paired) {
+        rows.add(AdminDoorRow(
+          lockerId: locker.id,
+          label: '${locker.id}',
+          forCollectionSide: false,
+          occupied: occupied,
+        ));
+        continue;
+      }
+      final location = _pairLocationByLockerId[locker.id];
+      final pairLabel =
+          location == null ? 'Pair ? · Locker ${locker.id}' : 'Pair ${location.pairIndex + 1} · Locker ${location.localId}';
+      rows.add(AdminDoorRow(
+        lockerId: locker.id,
+        label: '$pairLabel (Drop-off)',
+        forCollectionSide: false,
+        occupied: occupied,
+      ));
+      rows.add(AdminDoorRow(
+        lockerId: locker.id,
+        label: '$pairLabel (Collection)',
+        forCollectionSide: true,
+        occupied: occupied,
+      ));
+    }
+    return rows;
   }
 
   /// Fire-and-forget physical unlock, only when the real gRPC backend is
   /// selected (see `ConfigService.lockerBackend`). In `'mock'` mode this is
   /// a no-op — nothing to unlock, there's no hardware involved.
-  void _unlockPhysicalLocker(int lockerId) {
+  ///
+  /// [forCollectionSide] picks which physical door to unlock in paired
+  /// mode (see `ConfigService.pairedLockerMode`/`_grpcLockerNumber`):
+  /// `false` (the default) targets the drop-off-side board, `true` targets
+  /// the paired collection-side board covering the same physical cavity.
+  /// Outside paired mode this parameter has no effect — there's only one
+  /// door per logical locker, and [lockerId] is sent to gRPC as-is.
+  void _unlockPhysicalLocker(int lockerId, {bool forCollectionSide = false}) {
     if (!ConfigService().isGrpcBackend) return;
-    unawaited(LockerGrpcService.instance.unlockLocker(lockerId));
+    final grpcLockerNum =
+        _grpcLockerNumber(lockerId, forCollectionSide: forCollectionSide);
+    unawaited(LockerGrpcService.instance.unlockLocker(grpcLockerNum));
   }
 
   /// Liveness check against the configured backend — mirrors
@@ -378,25 +540,21 @@ class MockKioskRepository extends ChangeNotifier {
   }
 
   // --- Validation ------------------------------------------------------
+  //
+  // Both just delegate to `PhoneUtils` — kept as static passthroughs here
+  // (rather than updating every `MockKioskRepository.validatePhoneNumber`/
+  // `normalizeToSouthAfrica` call site in `lib/pages/customer/` to call
+  // `PhoneUtils` directly) purely so those call sites don't need to
+  // change. `PhoneUtils` lives in `core/utilities/` rather than here so
+  // `LockerGrpcService` (which this file already imports — putting the
+  // logic there instead would make that a circular import) can use the
+  // same normalization when actually sending an SMS.
 
-  /// Ported from `UtilService.validatePhoneNumber`: either a local
-  /// 10-digit `0XXXXXXXXX` number, or an international `+`-prefixed
-  /// number (max 12 digits normally, 15 when [isGlobal] is on).
-  static bool validatePhoneNumber(String phoneNumber, bool isGlobal) {
-    final local = RegExp(r'^0\d{9}$');
-    final intl = RegExp(isGlobal ? r'^\+[0-9]{1,15}$' : r'^\+[0-9]{1,12}$');
-    return local.hasMatch(phoneNumber) || intl.hasMatch(phoneNumber);
-  }
+  static bool validatePhoneNumber(String phoneNumber, bool isGlobal) =>
+      PhoneUtils.validatePhoneNumber(phoneNumber, isGlobal);
 
-  /// Normalizes a leading `0` into the `+27` South African country code,
-  /// matching every Activity's `if (phone.startsWith("0")) phone = "+27" +
-  /// phone.substring(1)` snippet.
-  static String normalizeToSouthAfrica(String phoneNumber) {
-    if (phoneNumber.startsWith('0')) {
-      return '+27${phoneNumber.substring(1)}';
-    }
-    return phoneNumber;
-  }
+  static String normalizeToSouthAfrica(String phoneNumber) =>
+      PhoneUtils.normalizeToSouthAfrica(phoneNumber);
 }
 
 extension _FirstWhereOrNullExtension<T> on List<T> {

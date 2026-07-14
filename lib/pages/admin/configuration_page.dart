@@ -44,6 +44,17 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
   bool _syncingLockers = false;
   String? _syncResult;
 
+  // --- Paired slave-board mode ------------------------------------------
+  //
+  // See `ConfigService.pairedLockerMode`/`lockerPairs`: an alternate
+  // locker-inventory shape for the "drop-off board mounted opposite a
+  // matching collection board" physical topology. Off by default — most
+  // of the fields above (the flat `locker_mapping`) still apply and are
+  // what's actually used when this is off.
+  late bool _pairedMode;
+  final List<_PairControllers> _pairControllers = [];
+  String? _pairsError;
+
   @override
   void initState() {
     super.initState();
@@ -54,12 +65,35 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
         TextEditingController(text: _config.lockerMappingText);
     _backend = _config.lockerBackend;
     _kioskMode = _config.kioskMode;
+    _pairedMode = _config.pairedLockerMode;
+    _loadPairControllersFromConfig();
+  }
+
+  void _loadPairControllersFromConfig() {
+    for (final c in _pairControllers) {
+      c.dispose();
+    }
+    _pairControllers.clear();
+    final saved = _config.lockerPairsAsText;
+    if (saved.isEmpty) {
+      _pairControllers.add(_PairControllers.empty());
+    } else {
+      for (final pair in saved) {
+        _pairControllers.add(_PairControllers(
+          dropoffText: pair.dropoffSizesCsv,
+          collectionText: pair.collectionSizesCsv,
+        ));
+      }
+    }
   }
 
   @override
   void dispose() {
     _addressController.dispose();
     _lockerMappingController.dispose();
+    for (final c in _pairControllers) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -69,19 +103,38 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
     await _config.setLockerAddress(address);
     await _config.setLockerBackend(_backend);
     await _config.setKioskMode(_kioskMode);
+    await _config.setPairedLockerMode(_pairedMode);
 
-    final mappingError =
-        await _config.setLockerMapping(_lockerMappingController.text.trim());
-    if (mappingError != null) {
-      setState(() {
-        _lockerMappingError = mappingError;
-        _savedMessage = null;
-      });
-      return;
+    if (_pairedMode) {
+      final pairsError = await _config.setLockerPairs([
+        for (final c in _pairControllers)
+          LockerPairSizesInput(
+            dropoffSizesCsv: c.dropoffController.text.trim(),
+            collectionSizesCsv: c.collectionController.text.trim(),
+          ),
+      ]);
+      if (pairsError != null) {
+        setState(() {
+          _pairsError = pairsError;
+          _savedMessage = null;
+        });
+        return;
+      }
+    } else {
+      final mappingError = await _config
+          .setLockerMapping(_lockerMappingController.text.trim());
+      if (mappingError != null) {
+        setState(() {
+          _lockerMappingError = mappingError;
+          _savedMessage = null;
+        });
+        return;
+      }
     }
 
     setState(() {
       _lockerMappingError = null;
+      _pairsError = null;
       _connectionResult = null;
       _savedMessage = _backend == 'grpc'
           ? 'Saved. Real hardware mode — address: $address'
@@ -96,10 +149,27 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
       _lockerMappingController.text = _config.lockerMappingText;
       _backend = _config.lockerBackend;
       _kioskMode = _config.kioskMode;
+      _pairedMode = _config.pairedLockerMode;
+      _loadPairControllersFromConfig();
       _lockerMappingError = null;
+      _pairsError = null;
       _connectionResult = null;
       _syncResult = null;
       _savedMessage = 'Reset to defaults.';
+    });
+  }
+
+  void _addPair() {
+    setState(() => _pairControllers.add(_PairControllers.empty()));
+  }
+
+  void _removePair(int index) {
+    setState(() {
+      _pairControllers[index].dispose();
+      _pairControllers.removeAt(index);
+      if (_pairControllers.isEmpty) {
+        _pairControllers.add(_PairControllers.empty());
+      }
     });
   }
 
@@ -382,6 +452,72 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                 ],
               ),
             ),
+            const SizedBox(height: 16),
+            AdminSectionCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Paired slave boards', style: AdminTextStyles.sectionTitle),
+                            SizedBox(height: 6),
+                            Text(
+                              'For a wall-mounted setup where each drop-off '
+                              'board is paired with a matching collection '
+                              'board on the other side of the wall — a '
+                              'drop-off into locker N on the pair\'s '
+                              'drop-off board is collected from locker N on '
+                              'the paired collection board. When on, the '
+                              'flat "Locker mapping" above is ignored in '
+                              'favor of the pairs below.',
+                              style: AdminTextStyles.body,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Switch(
+                        value: _pairedMode,
+                        activeColor: AppColors.teal,
+                        activeTrackColor: AppColors.teal.withOpacity(0.4),
+                        inactiveThumbColor: Colors.white70,
+                        inactiveTrackColor: Colors.white24,
+                        onChanged: (value) => setState(() => _pairedMode = value),
+                      ),
+                    ],
+                  ),
+                  if (_pairedMode) ...[
+                    const SizedBox(height: 16),
+                    for (var i = 0; i < _pairControllers.length; i++) ...[
+                      _PairEditorRow(
+                        pairNumber: i + 1,
+                        controllers: _pairControllers[i],
+                        onRemove: _pairControllers.length > 1 ? () => _removePair(i) : null,
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    OutlinedButton.icon(
+                      style: AdminInputStyle.outlinedButton,
+                      onPressed: _addPair,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add pair'),
+                    ),
+                    if (_pairsError != null) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        _pairsError!,
+                        style: TextStyle(fontFamily: 'Metropolis', color: Colors.redAccent[100]),
+                      ),
+                    ],
+                  ],
+                ],
+              ),
+            ),
             const SizedBox(height: 20),
             Row(
               children: [
@@ -413,6 +549,91 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// One pair's two `TextEditingController`s (drop-off side sizes,
+/// collection side sizes) — see `_ConfigurationPageState._pairControllers`.
+/// A tiny owned-resource wrapper so the page can build/dispose/reset the
+/// whole list of pairs without hand-tracking every controller pair.
+class _PairControllers {
+  _PairControllers({required String dropoffText, required String collectionText})
+      : dropoffController = TextEditingController(text: dropoffText),
+        collectionController = TextEditingController(text: collectionText);
+
+  factory _PairControllers.empty() =>
+      _PairControllers(dropoffText: '', collectionText: '');
+
+  final TextEditingController dropoffController;
+  final TextEditingController collectionController;
+
+  void dispose() {
+    dropoffController.dispose();
+    collectionController.dispose();
+  }
+}
+
+/// One board pair's editor row: drop-off-side and collection-side size
+/// lists (comma-separated, same shorthand as the flat "Locker mapping"
+/// field), plus a remove button. See
+/// `ConfigService.validateLockerPairSizes` for why both lists must have
+/// the same number of entries — a pair's two boards always share door
+/// count.
+class _PairEditorRow extends StatelessWidget {
+  const _PairEditorRow({
+    required this.pairNumber,
+    required this.controllers,
+    required this.onRemove,
+  });
+
+  final int pairNumber;
+  final _PairControllers controllers;
+  final VoidCallback? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.adminFieldFill,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: AppColors.panelBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text('Pair $pairNumber', style: AdminTextStyles.sectionTitle),
+              ),
+              if (onRemove != null)
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.white70),
+                  tooltip: 'Remove pair',
+                  onPressed: onRemove,
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text('Drop-off side sizes', style: AdminTextStyles.body),
+          const SizedBox(height: 6),
+          KeyboardTextField(
+            controller: controllers.dropoffController,
+            style: AdminTextStyles.fieldInput,
+            decoration: AdminInputStyle.fieldDecoration(hint: 'small,medium,large'),
+          ),
+          const SizedBox(height: 10),
+          const Text('Collection side sizes', style: AdminTextStyles.body),
+          const SizedBox(height: 6),
+          KeyboardTextField(
+            controller: controllers.collectionController,
+            style: AdminTextStyles.fieldInput,
+            decoration: AdminInputStyle.fieldDecoration(hint: 'small,medium,large'),
+          ),
+        ],
       ),
     );
   }

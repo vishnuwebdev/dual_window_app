@@ -36,6 +36,97 @@ class LockerMappingEntry {
 
 const _validSizes = {'small', 'medium', 'large'};
 
+/// One physical locker door within a paired-slave-board pair — see
+/// `ConfigService.lockerPairs` for the full "paired slave board" topology
+/// this models (real-world: two slave boards mounted back-to-back on a
+/// wall, one side used for drop-off, the other for collection, with
+/// matching door positions on each side wired to the same physical
+/// cavity). `localId` is 1-based and local to the pair — distinct from the
+/// flat/global id `MockKioskRepository` assigns each pair for its existing
+/// occupancy-tracking logic.
+class LockerPairEntry {
+  const LockerPairEntry({
+    required this.localId,
+    required this.dropoffSize,
+    required this.collectionSize,
+  });
+
+  final int localId;
+
+  /// Size shown to a customer picking a locker to drop off into — this is
+  /// the side that actually drives free-locker-by-size lookups (see
+  /// `MockKioskRepository._syncLockersFromConfig`).
+  final String dropoffSize;
+
+  /// Size of the matching door on the collection-side board. Tracked for
+  /// admin visibility/honesty only — nothing looks this up to *pick* a
+  /// locker, since collection always targets a specific existing parcel's
+  /// locker rather than "any free locker of size X".
+  final String collectionSize;
+
+  Map<String, dynamic> toJson() => {
+        'localId': localId,
+        'dropoffSize': dropoffSize,
+        'collectionSize': collectionSize,
+      };
+
+  static LockerPairEntry? tryFromJson(dynamic raw) {
+    if (raw is! Map) return null;
+    final localId = raw['localId'];
+    final dropoffSize = raw['dropoffSize'];
+    final collectionSize = raw['collectionSize'];
+    if (localId is! int ||
+        dropoffSize is! String ||
+        collectionSize is! String) {
+      return null;
+    }
+    final d = dropoffSize.toLowerCase();
+    final c = collectionSize.toLowerCase();
+    if (!_validSizes.contains(d) || !_validSizes.contains(c)) return null;
+    return LockerPairEntry(localId: localId, dropoffSize: d, collectionSize: c);
+  }
+}
+
+/// One physical slave-board pair: a drop-off-side board and a
+/// collection-side board sharing the same physical cavities, door for
+/// door. `lockers` is ordered by `localId` (1..N) and always has the same
+/// length as every other pair's hardware door count *within that pair*
+/// (drop-off and collection sides of one pair always match), though the
+/// count can differ pair-to-pair. See `ConfigService.lockerPairs`.
+class LockerPair {
+  const LockerPair({required this.lockers});
+
+  final List<LockerPairEntry> lockers;
+
+  Map<String, dynamic> toJson() =>
+      {'lockers': lockers.map((e) => e.toJson()).toList()};
+
+  static LockerPair? tryFromJson(dynamic raw) {
+    if (raw is! Map) return null;
+    final rawLockers = raw['lockers'];
+    if (rawLockers is! List || rawLockers.isEmpty) return null;
+    final parsed = rawLockers.map(LockerPairEntry.tryFromJson).toList();
+    if (parsed.any((e) => e == null)) return null;
+    return LockerPair(lockers: parsed.cast<LockerPairEntry>());
+  }
+}
+
+/// Comma-separated drop-off/collection size lists for one pair, as edited
+/// in `ConfigurationPage`'s paired-mode editor — the free-text input
+/// `ConfigService.setLockerPairs` parses and validates. Kept separate from
+/// `LockerPair`/`LockerPairEntry` (the parsed, persisted shape) the same
+/// way `setLockerMapping`'s comma-string input is separate from
+/// `LockerMappingEntry`.
+class LockerPairSizesInput {
+  const LockerPairSizesInput({
+    required this.dropoffSizesCsv,
+    required this.collectionSizesCsv,
+  });
+
+  final String dropoffSizesCsv;
+  final String collectionSizesCsv;
+}
+
 /// Single source of truth for every setting admins can change from the
 /// Admin menu, backed by a local `config.json` next to the app (mirroring
 /// how the Android app kept `admin.json` / `lockerConfig.json` on-device
@@ -72,6 +163,8 @@ class ConfigService extends ChangeNotifier {
   static const String _kLockerBackend = 'locker_backend';
   static const String _kKioskMode = 'kiosk_mode';
   static const String _kCvmainConfigDir = 'cvmain_config_dir';
+  static const String _kPairedLockerMode = 'paired_locker_mode';
+  static const String _kLockerPairs = 'locker_pairs';
 
   static const String _defaultAdminPin = '12345';
   static const String _defaultDropOffPin = '12345';
@@ -124,6 +217,14 @@ class ConfigService extends ChangeNotifier {
     LockerMappingEntry(id: 6, size: 'large'),
   ];
 
+  /// Off by default — opt-in, so existing single-board (or unpaired
+  /// multi-board) deployments keep behaving exactly as before. Turn on
+  /// only for the "drop-off board mounted opposite a matching collection
+  /// board" physical topology described on `lockerPairs`.
+  static const bool _defaultPairedLockerMode = false;
+
+  static const List<LockerPair> _defaultLockerPairs = [];
+
   String _adminPin = _defaultAdminPin;
   String _dropOffPin = _defaultDropOffPin;
   String _smsTemplate = _defaultSmsTemplate;
@@ -133,6 +234,9 @@ class ConfigService extends ChangeNotifier {
   bool _kioskMode = _defaultKioskMode;
 
   String _cvmainConfigDir = _defaultCvmainConfigDir;
+
+  bool _pairedLockerMode = _defaultPairedLockerMode;
+  List<LockerPair> _lockerPairs = _defaultLockerPairs;
 
   StreamSubscription<FileSystemEvent>? _watchSubscription;
 
@@ -199,7 +303,7 @@ class ConfigService extends ChangeNotifier {
         _lockerAddress = json[_kLockerAddress] as String? ?? _defaultLockerAddress;
         _cvmainConfigDir = json[_kCvmainConfigDir] as String? ?? _defaultCvmainConfigDir;
 
-        var needsRewrite = json.length != 8 ||
+        var needsRewrite = json.length != 10 ||
             !json.containsKey(_kAdminPin) ||
             !json.containsKey(_kDropOffPin) ||
             !json.containsKey(_kSmsTemplate) ||
@@ -207,7 +311,37 @@ class ConfigService extends ChangeNotifier {
             !json.containsKey(_kLockerAddress) ||
             !json.containsKey(_kLockerBackend) ||
             !json.containsKey(_kKioskMode) ||
-            !json.containsKey(_kCvmainConfigDir);
+            !json.containsKey(_kCvmainConfigDir) ||
+            !json.containsKey(_kPairedLockerMode) ||
+            !json.containsKey(_kLockerPairs);
+
+        final rawPairedMode = json[_kPairedLockerMode];
+        _pairedLockerMode =
+            rawPairedMode is bool ? rawPairedMode : _defaultPairedLockerMode;
+        if (rawPairedMode is! bool) needsRewrite = true;
+
+        final rawPairs = json[_kLockerPairs];
+        if (rawPairs is List) {
+          if (rawPairs.isEmpty) {
+            _lockerPairs = _defaultLockerPairs;
+          } else {
+            final parsedPairs = rawPairs.map(LockerPair.tryFromJson).toList();
+            if (parsedPairs.every((e) => e != null)) {
+              _lockerPairs = parsedPairs.cast<LockerPair>();
+            } else {
+              // Malformed pair entries — fall back to empty (paired mode
+              // effectively disabled until an admin re-enters the mapping)
+              // rather than risk unlocking the wrong physical door with a
+              // half-parsed pair list.
+              _lockerPairs = _defaultLockerPairs;
+              _pairedLockerMode = false;
+              needsRewrite = true;
+            }
+          }
+        } else {
+          _lockerPairs = _defaultLockerPairs;
+          needsRewrite = true;
+        }
 
         final rawKioskMode = json[_kKioskMode];
         _kioskMode = rawKioskMode is bool ? rawKioskMode : _defaultKioskMode;
@@ -268,6 +402,8 @@ class ConfigService extends ChangeNotifier {
       _kLockerBackend: _lockerBackend,
       _kKioskMode: _kioskMode,
       _kCvmainConfigDir: _cvmainConfigDir,
+      _kPairedLockerMode: _pairedLockerMode,
+      _kLockerPairs: _lockerPairs.map((e) => e.toJson()).toList(),
     }));
     notifyListeners();
   }
@@ -332,6 +468,28 @@ class ConfigService extends ChangeNotifier {
     return null;
   }
 
+  /// Validates one paired-slave-board pair's drop-off/collection size
+  /// lists: each list must independently pass [validateLockerMapping], and
+  /// — since a drop-off door and its paired collection door always share
+  /// the same physical door count (see `LockerPair`) — both lists must
+  /// have the same number of entries.
+  static String? validateLockerPairSizes(
+      String dropoffSizesCsv, String collectionSizesCsv) {
+    final dropoffError = validateLockerMapping(dropoffSizesCsv);
+    if (dropoffError != null) return 'Drop-off side: $dropoffError';
+    final collectionError = validateLockerMapping(collectionSizesCsv);
+    if (collectionError != null) return 'Collection side: $collectionError';
+
+    final dropoffCount = stripWhitespace(dropoffSizesCsv).split(',').length;
+    final collectionCount =
+        stripWhitespace(collectionSizesCsv).split(',').length;
+    if (dropoffCount != collectionCount) {
+      return 'Drop-off side has $dropoffCount locker(s) but collection side '
+          'has $collectionCount — a paired board\'s two sides must match.';
+    }
+    return null;
+  }
+
   /// Strips every character out of [value] that isn't a digit — used to
   /// filter keystrokes live in numeric-only fields.
   static String digitsOnly(String value) =>
@@ -363,6 +521,88 @@ class ConfigService extends ChangeNotifier {
   /// comma-separated shorthand (`"small,small,medium,..."`) for display in
   /// `ConfigurationPage`'s text field.
   String get lockerMappingText => _lockerMapping.map((e) => e.size).join(',');
+
+  /// Whether "paired slave board" mode is on — see [lockerPairs] for the
+  /// physical topology this models. When true, `MockKioskRepository`
+  /// ignores [lockerMapping] and builds its locker inventory from
+  /// [lockerPairs] instead, and every physical unlock computes a
+  /// drop-off-board or collection-board gRPC `locker_num` depending on
+  /// which action is happening rather than using the flat locker id
+  /// directly.
+  bool get pairedLockerMode => _pairedLockerMode;
+
+  /// The paired slave-board topology: each entry is one physical board
+  /// pair — a drop-off-side board and a collection-side board mounted on
+  /// opposite faces of the same wall cavity, so a locker used for
+  /// drop-off on board N is the *same physical compartment* as the
+  /// matching locker on board N's paired collection board. Pairs are
+  /// always sequential in gRPC's global locker numbering (pair 0 = boards
+  /// 1↔2, pair 1 = boards 3↔4, ...) — see
+  /// `MockKioskRepository._grpcLockerNumber` for the offset math this
+  /// getter feeds.
+  ///
+  /// Only meaningful when [pairedLockerMode] is true; empty otherwise.
+  List<LockerPair> get lockerPairs => List.unmodifiable(_lockerPairs);
+
+  Future<void> setPairedLockerMode(bool value) async {
+    _pairedLockerMode = value;
+    await _persistConfig();
+    logger.i('Paired locker mode updated to: $value');
+  }
+
+  /// Parses one comma-separated drop-off/collection size list per pair
+  /// (see [validateLockerPairSizes]) into structured [LockerPair]s and
+  /// persists them. `localId`s within each pair are assigned by position
+  /// (1-based), mirroring [setLockerMapping]'s id-by-position convention.
+  ///
+  /// Validates every pair before writing any of them — a partially valid
+  /// list is never persisted, since a truncated/mismatched pair list here
+  /// could make `MockKioskRepository` compute a wrong physical door for
+  /// an existing drop-off.
+  Future<String?> setLockerPairs(List<LockerPairSizesInput> pairs) async {
+    if (pairs.isEmpty) return 'At least one board pair is required.';
+
+    for (var i = 0; i < pairs.length; i++) {
+      final error = validateLockerPairSizes(
+          pairs[i].dropoffSizesCsv, pairs[i].collectionSizesCsv);
+      if (error != null) return 'Pair ${i + 1}: $error';
+    }
+
+    _lockerPairs = [
+      for (final pair in pairs)
+        LockerPair(
+          lockers: [
+            for (var i = 0;
+                i < stripWhitespace(pair.dropoffSizesCsv).split(',').length;
+                i++)
+              LockerPairEntry(
+                localId: i + 1,
+                dropoffSize: stripWhitespace(pair.dropoffSizesCsv)
+                    .split(',')[i]
+                    .toLowerCase(),
+                collectionSize: stripWhitespace(pair.collectionSizesCsv)
+                    .split(',')[i]
+                    .toLowerCase(),
+              ),
+          ],
+        ),
+    ];
+    await _persistConfig();
+    logger.i('Locker pairs updated: ${_lockerPairs.length} pair(s).');
+    return null;
+  }
+
+  /// Flattens [lockerPairs] into the same comma-separated shorthand
+  /// [lockerMappingText] uses, for display in the paired-mode editor —
+  /// one line per pair, drop-off sizes then collection sizes.
+  List<LockerPairSizesInput> get lockerPairsAsText => [
+        for (final pair in _lockerPairs)
+          LockerPairSizesInput(
+            dropoffSizesCsv: pair.lockers.map((e) => e.dropoffSize).join(','),
+            collectionSizesCsv:
+                pair.lockers.map((e) => e.collectionSize).join(','),
+          ),
+      ];
 
   // --- Setters ---------------------------------------------------------
   //
@@ -542,6 +782,8 @@ class ConfigService extends ChangeNotifier {
     _lockerBackend = _defaultLockerBackend;
     _kioskMode = _defaultKioskMode;
     _cvmainConfigDir = _defaultCvmainConfigDir;
+    _pairedLockerMode = _defaultPairedLockerMode;
+    _lockerPairs = _defaultLockerPairs;
     await _persistConfig();
     logger.i('ConfigService reset to defaults');
   }

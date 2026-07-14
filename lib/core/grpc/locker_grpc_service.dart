@@ -4,6 +4,7 @@ import 'package:grpc/grpc.dart';
 
 import '../config/config_service.dart';
 import '../utilities/logging.dart';
+import '../utilities/phone_utils.dart';
 // Generated from protos/service.proto — see protos/CODEGEN.md for how to
 // (re)produce these. `Empty` comes from protobuf's own bundled well-known
 // type rather than a locally-generated copy — the protoc_plugin version
@@ -151,11 +152,18 @@ class LockerGrpcService {
   /// Mirrors `DbService.sendSms` — submits an SMS via the unit's own
   /// `send_sms` RPC (transmitted by VaultGroup's backend) rather than just
   /// logging it locally the way the mock backend does.
+  ///
+  /// Normalizes [cellNum] defensively before sending — every call site
+  /// already normalizes upstream, but this is the last point before the
+  /// number leaves the app, so it's worth guaranteeing it's always
+  /// exactly one "+27..." here too, idempotently (see
+  /// `PhoneUtils.normalizeToSouthAfrica`).
   Future<bool> sendSms(String cellNum, String message) async {
     try {
+      final normalizedCellNum = PhoneUtils.normalizeToSouthAfrica(cellNum);
       final client = _clientFor(ConfigService().lockerAddress);
       final response = await client.send_sms(
-        SendSmsRequest(cellNum: cellNum, msg: message),
+        SendSmsRequest(cellNum: normalizedCellNum, msg: message),
       );
       return response.hasResp() && response.resp.success;
     } catch (e) {

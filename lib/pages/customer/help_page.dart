@@ -27,6 +27,15 @@ class _HelpPageState extends State<HelpPage> with InactivityTimerMixin {
   void initState() {
     super.initState();
     startInactivityTimer();
+    // Pre-fill "+27" — see the matching comment in
+    // `collection_input_page.dart` for why (no '+' key on the on-screen
+    // keyboard at all).
+    if (!_repo.isGlobal) {
+      _phoneController.value = const TextEditingValue(
+        text: '+27',
+        selection: TextSelection.collapsed(offset: 3),
+      );
+    }
   }
 
   @override
@@ -45,10 +54,13 @@ class _HelpPageState extends State<HelpPage> with InactivityTimerMixin {
   }
 
   void _handleConfirm() {
-    var phone = _phoneController.text.trim();
-    if (phone.startsWith('0')) {
-      phone = MockKioskRepository.normalizeToSouthAfrica(phone);
-    }
+    final rawPhone = _phoneController.text.trim();
+    // Always normalize (not just when it starts with "0") — the field is
+    // pre-filled with "+27" now, so the raw text is already generally
+    // "+27"-prefixed; this also collapses a duplicated prefix if the
+    // customer types their local number again after it. See
+    // `normalizeToSouthAfrica`'s doc comment.
+    final phone = MockKioskRepository.normalizeToSouthAfrica(rawPhone);
 
     if (!MockKioskRepository.validatePhoneNumber(phone, _repo.isGlobal)) {
       InfoDialog.show(context,

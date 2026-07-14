@@ -54,7 +54,7 @@ class _CustomKeyboardState extends State<CustomKeyboard> {
 
   static const _symbolRows = [
     ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
-    ['-', '/', ':', ';', '(', ')', '&', '@', '"'],
+    ['-', '/', '+', ':', ';', '(', ')', '&', '@', '"'],
     ['.', ',', '?', '!', "'"],
   ];
 
@@ -70,13 +70,15 @@ class _CustomKeyboardState extends State<CustomKeyboard> {
 
   void _tapShift() {
     final now = DateTime.now();
-    final isDoubleTap =
-        _lastShiftTap != null && now.difference(_lastShiftTap!) <= _doubleTapWindow;
+    final isDoubleTap = _lastShiftTap != null &&
+        now.difference(_lastShiftTap!) <= _doubleTapWindow;
 
     setState(() {
       _shiftMode = switch (_shiftMode) {
         _ShiftMode.locked => _ShiftMode.off,
-        _ShiftMode.off || _ShiftMode.single when isDoubleTap => _ShiftMode.locked,
+        _ShiftMode.off ||
+        _ShiftMode.single when isDoubleTap =>
+          _ShiftMode.locked,
         _ => _ShiftMode.single,
       };
     });
@@ -203,7 +205,8 @@ class _Key extends StatelessWidget {
             // VirtualKeyboardController) before onTap even fires.
             canRequestFocus: false,
             onTap: onTap,
-            child: Center(child: Text(label, style: const TextStyle(fontSize: 16))),
+            child: Center(
+                child: Text(label, style: const TextStyle(fontSize: 16))),
           ),
         ),
       ),
@@ -251,7 +254,8 @@ class _ControlKey extends StatelessWidget {
             child: Center(
               child: icon != null
                   ? Icon(icon, size: 20, color: fg)
-                  : Text(label ?? '', style: TextStyle(fontSize: 14, color: fg)),
+                  : Text(label ?? '',
+                      style: TextStyle(fontSize: 14, color: fg)),
             ),
           ),
         ),

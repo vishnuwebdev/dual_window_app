@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../core/config/config_service.dart';
 import '../../core/grpc/locker_grpc_service.dart';
 import '../../core/mock/mock_kiosk_repository.dart';
+import '../../core/mock/models.dart';
 import '../../core/registration/audit_codes.dart';
 import 'configuration_page.dart';
 
@@ -19,6 +20,15 @@ import 'configuration_page.dart';
 /// screen isn't wired to `LockerService`/gRPC yet). "Clear"/"Open" act on
 /// every checked row; "Open all" clears every occupied locker regardless
 /// of selection.
+///
+/// In `ConfigService.pairedLockerMode`, each logical locker shows as *two*
+/// rows — one per physical door (drop-off side, collection side) — via
+/// `MockKioskRepository.getAdminDoorRows`, per the confirmed requirement
+/// that admins see/control each physical door separately even though both
+/// doors share one occupancy state. Selection (checkboxes) stays keyed by
+/// the shared logical locker id, so checking either row of a pair selects
+/// both for bulk Clear/Open; each row also gets its own small "Open" icon
+/// for opening just that one physical door.
 class AdminOverridePage extends StatefulWidget {
   const AdminOverridePage({super.key});
 
@@ -69,19 +79,37 @@ class _AdminOverridePageState extends State<AdminOverridePage> {
     });
   }
 
+  /// Bulk "Open" (from checkbox selection): opens every selected pair's
+  /// door(s). In paired mode that's *both* physical doors, since the
+  /// bottom bulk button has no per-row "which side" context — an admin
+  /// wanting just one specific door uses that row's own Open icon
+  /// instead (see [_handleOpenRow]).
   void _handleOpen() {
     if (_selectedLockerIds.isEmpty) {
       _showMessage('Select at least one locker first.');
       return;
     }
+    final paired = ConfigService().pairedLockerMode;
     for (final id in _selectedLockerIds) {
       // Mirrors `AdminOverrideActivity`'s "Open" action: physically unlock
       // without clearing the parcel record (see
       // `MockKioskRepository.openLockerOnly`, distinct from "Clear").
       _repo.openLockerOnly(id);
       _sendAdminUnlockAudit(id);
+      if (paired) {
+        _repo.openLockerOnly(id, forCollectionSide: true);
+        _sendAdminUnlockAudit(id);
+      }
     }
     _showMessage('Locker(s) ${_selectedLockerIds.join(', ')} unlocked.');
+  }
+
+  /// Per-row "Open" (see [AdminDoorRow]): opens exactly the one physical
+  /// door the row represents, regardless of checkbox selection.
+  void _handleOpenRow(AdminDoorRow row) {
+    _repo.openLockerOnly(row.lockerId, forCollectionSide: row.forCollectionSide);
+    _sendAdminUnlockAudit(row.lockerId);
+    _showMessage('${row.label} unlocked.');
   }
 
   /// Mirrors `openLockerWithAdminLogs`: sends both the "starting" and
@@ -113,6 +141,8 @@ class _AdminOverridePageState extends State<AdminOverridePage> {
       return;
     }
     for (final id in _selectedLockerIds) {
+      // In paired mode, `clearLocker` already opens both physical doors
+      // internally — see its doc comment.
       _repo.clearLocker(id);
     }
     setState(() => _selectedLockerIds.clear());
@@ -131,7 +161,7 @@ class _AdminOverridePageState extends State<AdminOverridePage> {
 
   @override
   Widget build(BuildContext context) {
-    final lockers = _repo.getAllLockers();
+    final rows = _repo.getAdminDoorRows();
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -163,16 +193,15 @@ class _AdminOverridePageState extends State<AdminOverridePage> {
               const Divider(height: 1, color: Colors.black12),
               Expanded(
                 child: ListView.separated(
-                  itemCount: lockers.length,
+                  itemCount: rows.length,
                   separatorBuilder: (_, __) => const Divider(height: 1, color: Colors.black12),
                   itemBuilder: (context, index) {
-                    final locker = lockers[index];
-                    final occupied = !_repo.isLockerFree(locker.id);
+                    final row = rows[index];
                     return _TableRow(
-                      lockerId: locker.id,
-                      occupied: occupied,
-                      selected: _selectedLockerIds.contains(locker.id),
-                      onChanged: (value) => _toggleLocker(locker.id, value),
+                      row: row,
+                      selected: _selectedLockerIds.contains(row.lockerId),
+                      onChanged: (value) => _toggleLocker(row.lockerId, value),
+                      onOpen: () => _handleOpenRow(row),
                     );
                   },
                 ),
@@ -247,8 +276,9 @@ class _TableHeader extends StatelessWidget {
             ],
           ),
         ),
-        const Expanded(child: Text('LockerId', style: _style)),
+        const Expanded(flex: 2, child: Text('Locker', style: _style)),
         const Expanded(child: Text('Status', style: _style)),
+        const SizedBox(width: 48),
       ],
     );
   }
@@ -256,16 +286,16 @@ class _TableHeader extends StatelessWidget {
 
 class _TableRow extends StatelessWidget {
   const _TableRow({
-    required this.lockerId,
-    required this.occupied,
+    required this.row,
     required this.selected,
     required this.onChanged,
+    required this.onOpen,
   });
 
-  final int lockerId;
-  final bool occupied;
+  final AdminDoorRow row;
   final bool selected;
   final ValueChanged<bool?> onChanged;
+  final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -278,11 +308,19 @@ class _TableRow extends StatelessWidget {
             flex: 2,
             child: Checkbox(value: selected, onChanged: onChanged),
           ),
-          Expanded(child: Text('$lockerId', style: style)),
+          Expanded(flex: 2, child: Text(row.label, style: style)),
           Expanded(
             child: Text(
-              occupied ? 'Occupied' : 'Free',
-              style: style.copyWith(color: occupied ? Colors.orange[800] : Colors.green[700]),
+              row.occupied ? 'Occupied' : 'Free',
+              style: style.copyWith(color: row.occupied ? Colors.orange[800] : Colors.green[700]),
+            ),
+          ),
+          SizedBox(
+            width: 48,
+            child: IconButton(
+              icon: const Icon(Icons.lock_open, size: 20, color: Colors.black54),
+              tooltip: 'Open just this door',
+              onPressed: onOpen,
             ),
           ),
         ],

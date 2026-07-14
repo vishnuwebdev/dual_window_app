@@ -26,6 +26,17 @@ class _CollectionInputPageState extends State<CollectionInputPage>
   void initState() {
     super.initState();
     startInactivityTimer();
+    // Pre-fill "+27" — the on-screen keyboard (see `custom_keyboard.dart`)
+    // has no '+' key at all, so without this, a customer has no way to
+    // type an international-format number themselves. Only relevant in
+    // SA-only mode; global mode leaves the field blank as before. Cursor
+    // placed after the prefix so typing just continues the number.
+    if (!_repo.isGlobal) {
+      _phoneController.value = const TextEditingValue(
+        text: '+27',
+        selection: TextSelection.collapsed(offset: 3),
+      );
+    }
   }
 
   @override
@@ -49,7 +60,13 @@ class _CollectionInputPageState extends State<CollectionInputPage>
       return;
     }
 
-    if (!MockKioskRepository.validatePhoneNumber(rawPhone, _repo.isGlobal)) {
+    // Normalize before validating (not after) — this is what collapses a
+    // duplicated "+27" (e.g. from typing "0821234567" or "27821234567"
+    // after the pre-filled "+27" prefix above) into a single valid
+    // number, rather than rejecting it as malformed.
+    final phone = MockKioskRepository.normalizeToSouthAfrica(rawPhone);
+
+    if (!MockKioskRepository.validatePhoneNumber(phone, _repo.isGlobal)) {
       setState(() =>
           _errorText = 'Please enter a valid cell phone number and try again.');
       return;
@@ -60,7 +77,6 @@ class _CollectionInputPageState extends State<CollectionInputPage>
       return;
     }
 
-    final phone = MockKioskRepository.normalizeToSouthAfrica(rawPhone);
     final matches =
         _repo.itemsForPhone(phone).where((item) => item.pin == pin).toList();
 
