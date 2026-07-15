@@ -35,6 +35,13 @@ class _CollectionCompletePageState extends State<CollectionCompletePage>
 
   Timer? _autoReturnTimer;
   late final List<int> _lockerIds;
+  // Human-facing labels ("Board 2, Locker 3" in paired mode, or just the
+  // flat id otherwise) for `_lockerIds`, in the same order — see
+  // `MockKioskRepository.lockerDisplayLabel`. The raw flat id is what
+  // `unlock_locker` actually receives (used for `_lockerIds` itself and
+  // the audit log below), but it's not necessarily what's printed on the
+  // door, so the on-screen message uses these instead.
+  late final List<String> _lockerLabels;
   bool _navigated = false;
 
   @override
@@ -47,7 +54,16 @@ class _CollectionCompletePageState extends State<CollectionCompletePage>
         .itemsForPhone(widget.phone)
         .where((item) => item.pin == widget.oneTimePin)
         .toList();
-    _lockerIds = matches.map((item) => item.lockerId).toList()..sort();
+    // The door that actually unlocks on collection is
+    // `collectionLockerId` (the paired board's door) when paired mode was
+    // on at drop-off time, not `lockerId` (the drop-off door itself) — see
+    // `MockKioskRepository.removeItems`. The customer must be told the
+    // door that's really opening, not the one they used to drop it off.
+    _lockerIds = matches
+        .map((item) => item.collectionLockerId ?? item.lockerId)
+        .toList()
+      ..sort();
+    _lockerLabels = _lockerIds.map(repo.lockerDisplayLabel).toList();
 
     // Audit trail mirrors `DbService.removeItem`'s pickup flow. A pin that
     // matched nothing approximates Android's AUDIT_LOG_PICKUP_WRONG_PIN;
@@ -109,9 +125,9 @@ class _CollectionCompletePageState extends State<CollectionCompletePage>
 
   @override
   Widget build(BuildContext context) {
-    final text = _lockerIds.length > 1
-        ? 'Please collect your parcels from lockers ${_lockerIds.join(', ')} and close the locker door once complete'
-        : 'Please collect your parcel from locker ${_lockerIds.isEmpty ? '-' : _lockerIds.first} and close the locker door once complete';
+    final text = _lockerLabels.length > 1
+        ? 'Please collect your parcels from lockers ${_lockerLabels.join(', ')} and close the locker door once complete'
+        : 'Please collect your parcel from locker ${_lockerLabels.isEmpty ? '-' : _lockerLabels.first} and close the locker door once complete';
 
     return wrapWithActivityDetector(
       KioskScaffold(

@@ -36,6 +36,11 @@ class DeliverPlaceParcelPage extends StatefulWidget {
 class _DeliverPlaceParcelPageState extends State<DeliverPlaceParcelPage> {
   Timer? _autoAdvanceTimer;
   int? _lockerId;
+  // Human-facing label ("Board 1, Locker 3" in paired mode, or just the
+  // flat id otherwise) — see `MockKioskRepository.lockerDisplayLabel`.
+  // Physical doors are labeled per-board, not with the internal flat id,
+  // so this — not `_lockerId` — is what the customer should actually see.
+  String? _lockerLabel;
   bool _navigated = false;
 
   @override
@@ -62,6 +67,7 @@ class _DeliverPlaceParcelPageState extends State<DeliverPlaceParcelPage> {
 
       final item = repo.addItem(phone: widget.phone, lockerId: locker.id);
       _lockerId = locker.id;
+      _lockerLabel = repo.lockerDisplayLabel(locker.id);
 
       // Mirrors `DbService.addItem` -> `sendSms`: substitute the real PIN
       // into `config.json`'s `sms_template` and send the drop-off
@@ -104,7 +110,7 @@ class _DeliverPlaceParcelPageState extends State<DeliverPlaceParcelPage> {
   Widget build(BuildContext context) {
     final text = _lockerId == null
         ? 'Sorry, no lockers of that size are available right now.'
-        : 'Please place your parcel(s) in locker $_lockerId and close the locker door once complete';
+        : 'Please place your parcel(s) in locker $_lockerLabel and close the locker door once complete';
 
     return KioskScaffold(
       waves: KioskWaves.right,

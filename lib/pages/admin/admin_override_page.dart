@@ -21,14 +21,13 @@ import 'configuration_page.dart';
 /// every checked row; "Open all" clears every occupied locker regardless
 /// of selection.
 ///
-/// In `ConfigService.pairedLockerMode`, each logical locker shows as *two*
-/// rows — one per physical door (drop-off side, collection side) — via
-/// `MockKioskRepository.getAdminDoorRows`, per the confirmed requirement
-/// that admins see/control each physical door separately even though both
-/// doors share one occupancy state. Selection (checkboxes) stays keyed by
-/// the shared logical locker id, so checking either row of a pair selects
-/// both for bulk Clear/Open; each row also gets its own small "Open" icon
-/// for opening just that one physical door.
+/// In `ConfigService.pairedLockerMode`, every physical door (drop-off side
+/// and collection side alike) is its own real [Locker] with its own row —
+/// see `MockKioskRepository.getAdminDoorRows`. Both rows of a pair always
+/// show the same occupied state (see `MockKioskRepository.isLockerFree`),
+/// and checking either row's checkbox and hitting "Clear" clears/opens
+/// both doors (see `MockKioskRepository.clearLocker`); each row also gets
+/// its own small "Open" icon for opening just that one specific door.
 class AdminOverridePage extends StatefulWidget {
   const AdminOverridePage({super.key});
 
@@ -79,27 +78,22 @@ class _AdminOverridePageState extends State<AdminOverridePage> {
     });
   }
 
-  /// Bulk "Open" (from checkbox selection): opens every selected pair's
-  /// door(s). In paired mode that's *both* physical doors, since the
-  /// bottom bulk button has no per-row "which side" context — an admin
-  /// wanting just one specific door uses that row's own Open icon
-  /// instead (see [_handleOpenRow]).
+  /// Bulk "Open" (from checkbox selection): opens exactly the checked
+  /// rows' doors — each row is now its own real physical locker id (see
+  /// `MockKioskRepository.getAdminDoorRows`), so there's no "which side"
+  /// ambiguity to resolve here anymore. To open both doors of a pair, an
+  /// admin checks both of that pair's rows.
   void _handleOpen() {
     if (_selectedLockerIds.isEmpty) {
       _showMessage('Select at least one locker first.');
       return;
     }
-    final paired = ConfigService().pairedLockerMode;
     for (final id in _selectedLockerIds) {
       // Mirrors `AdminOverrideActivity`'s "Open" action: physically unlock
       // without clearing the parcel record (see
       // `MockKioskRepository.openLockerOnly`, distinct from "Clear").
       _repo.openLockerOnly(id);
       _sendAdminUnlockAudit(id);
-      if (paired) {
-        _repo.openLockerOnly(id, forCollectionSide: true);
-        _sendAdminUnlockAudit(id);
-      }
     }
     _showMessage('Locker(s) ${_selectedLockerIds.join(', ')} unlocked.');
   }
@@ -107,7 +101,7 @@ class _AdminOverridePageState extends State<AdminOverridePage> {
   /// Per-row "Open" (see [AdminDoorRow]): opens exactly the one physical
   /// door the row represents, regardless of checkbox selection.
   void _handleOpenRow(AdminDoorRow row) {
-    _repo.openLockerOnly(row.lockerId, forCollectionSide: row.forCollectionSide);
+    _repo.openLockerOnly(row.lockerId);
     _sendAdminUnlockAudit(row.lockerId);
     _showMessage('${row.label} unlocked.');
   }

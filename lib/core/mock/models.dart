@@ -16,28 +16,46 @@ class Locker {
 /// A parcel "ticket": which locker it's in, the phone number it belongs to,
 /// and the one-time PIN needed to collect it. Equivalent to the Android
 /// `Item` data class.
+///
+/// In `ConfigService.pairedLockerMode` (see the "paired slave board"
+/// topology described there), a drop-off physically occupies *two* real
+/// locker doors that are wired to the same cavity: [lockerId] is the door
+/// the parcel was actually placed behind (the drop-off-side board's
+/// door — what physically got unlocked during drop-off), and
+/// [collectionLockerId] is its linked partner on the paired
+/// collection-side board, which is what actually gets unlocked when the
+/// customer collects. Both ids are frozen onto the item at drop-off time
+/// (see `MockKioskRepository.addItem`) rather than recomputed from
+/// `ConfigService` each time, so an admin editing the board layout later
+/// can never retroactively change where an *already dropped-off* parcel's
+/// collection door points. `null` outside paired mode — there's only one
+/// door, [lockerId] is it, exactly like before this feature existed.
 class LockerItem {
   LockerItem({
     required this.phone,
     required this.pin,
     required this.lockerId,
     required this.creationDate,
+    this.collectionLockerId,
   });
 
   final String phone;
   String pin;
   final int lockerId;
+  final int? collectionLockerId;
   final DateTime creationDate;
 }
 
-/// One row in the Admin Override table. In the normal (unpaired) case
-/// there's exactly one row per [Locker] — the flat, pre-paired-mode
-/// behavior. In `ConfigService.pairedLockerMode`, each logical locker
-/// produces *two* rows, one per physical door (drop-off side and
-/// collection side of the pair) — see
-/// `MockKioskRepository.getAdminDoorRows`. Both rows for a pair always
-/// show the same [occupied] state, since occupancy is tracked once per
-/// logical locker, not per physical door.
+/// One row in the Admin Override table — one per physical locker door.
+/// Outside paired mode this is exactly one row per [Locker] (unchanged
+/// from before pairing existed). In `ConfigService.pairedLockerMode`,
+/// [Locker]/`MockKioskRepository.getAllLockers()` already contains every
+/// physical door on every board as its own separate entry (drop-off-side
+/// and collection-side doors alike), so this is still one row per
+/// [Locker] — `forCollectionSide` just flags which physical role that
+/// particular door plays, for display and so a paired parcel's two rows
+/// share one [occupied] state even though they're different lockers. See
+/// `MockKioskRepository.getAdminDoorRows`.
 class AdminDoorRow {
   const AdminDoorRow({
     required this.lockerId,
@@ -46,18 +64,19 @@ class AdminDoorRow {
     required this.occupied,
   });
 
-  /// The logical/flat locker id — what `MockKioskRepository`'s occupancy
-  /// tracking (`isLockerFree`, `_items`, etc.) keys on. Both rows of a
-  /// pair share this same id.
+  /// The real locker id for this specific physical door — what
+  /// `MockKioskRepository.openLockerOnly`/`clearLocker` act on directly,
+  /// and what `LockerGrpcService.unlockLocker` receives as-is (no
+  /// translation layer — see `MockKioskRepository._unlockPhysicalLocker`).
   final int lockerId;
 
-  /// Display label, e.g. `"3"` (unpaired) or `"Pair 2 · Locker 3
-  /// (Drop-off)"` (paired).
+  /// Display label, e.g. `"3"` (unpaired) or `"Locker 9 (Collection,
+  /// paired with 5)"` (paired).
   final String label;
 
-  /// Which physical door this row represents — only meaningful in paired
-  /// mode. Determines which board's gRPC `locker_num` a per-row "Open"
-  /// action computes (see `MockKioskRepository.openLockerOnly`).
+  /// Whether this door is the *collection*-side door of a pair — purely
+  /// informational/for styling; opening or clearing a row always acts on
+  /// [lockerId] directly regardless of this flag.
   final bool forCollectionSide;
 
   final bool occupied;
