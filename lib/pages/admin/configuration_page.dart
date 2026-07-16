@@ -37,7 +37,8 @@ class ConfigurationPage extends StatefulWidget {
 /// so the in-progress editor list doesn't need to round-trip through
 /// `ConfigService` on every add/remove.
 class _PendingLockerPair {
-  const _PendingLockerPair({required this.dropoffId, required this.collectionId});
+  const _PendingLockerPair(
+      {required this.dropoffId, required this.collectionId});
 
   final int dropoffId;
   final int collectionId;
@@ -136,8 +137,8 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
     await _config.setPairedLockerMode(_pairedMode);
 
     if (_pairedMode) {
-      final boardCountsError =
-          await _config.setBoardLockerCounts(_boardCountsController.text.trim());
+      final boardCountsError = await _config
+          .setBoardLockerCounts(_boardCountsController.text.trim());
       if (boardCountsError != null) {
         setState(() {
           _lockerMappingError = null;
@@ -201,11 +202,14 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
   void _addPendingPair() {
     final dropoffId = _selectedDropoffId;
     final collectionId = _selectedCollectionId;
-    if (dropoffId == null || collectionId == null || dropoffId == collectionId) {
+    if (dropoffId == null ||
+        collectionId == null ||
+        dropoffId == collectionId) {
       return;
     }
     setState(() {
-      _pendingPairs.add(_PendingLockerPair(dropoffId: dropoffId, collectionId: collectionId));
+      _pendingPairs.add(
+          _PendingLockerPair(dropoffId: dropoffId, collectionId: collectionId));
       _selectedDropoffId = null;
       _selectedCollectionId = null;
       _pairingError = null;
@@ -284,19 +288,23 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
     // `_lockerMappingController` — see the "Locker pairing" section's
     // helper text telling the admin to save the mapping above first).
     final totalLockers = _config.lockerMapping.length;
-    final usedIds = _pendingPairs.expand((p) => [p.dropoffId, p.collectionId]).toSet();
+    final usedIds =
+        _pendingPairs.expand((p) => [p.dropoffId, p.collectionId]).toSet();
     final allLockerIds = List.generate(totalLockers, (i) => i + 1);
-    final availableIds = allLockerIds.where((id) => !usedIds.contains(id)).toList();
-    final dropoffValue =
-        (_selectedDropoffId != null && availableIds.contains(_selectedDropoffId))
-            ? _selectedDropoffId
-            : null;
-    final collectionValue =
-        (_selectedCollectionId != null && availableIds.contains(_selectedCollectionId))
-            ? _selectedCollectionId
-            : null;
-    final dropoffOptions = availableIds.where((id) => id != collectionValue).toList();
-    final collectionOptions = availableIds.where((id) => id != dropoffValue).toList();
+    final availableIds =
+        allLockerIds.where((id) => !usedIds.contains(id)).toList();
+    final dropoffValue = (_selectedDropoffId != null &&
+            availableIds.contains(_selectedDropoffId))
+        ? _selectedDropoffId
+        : null;
+    final collectionValue = (_selectedCollectionId != null &&
+            availableIds.contains(_selectedCollectionId))
+        ? _selectedCollectionId
+        : null;
+    final dropoffOptions =
+        availableIds.where((id) => id != collectionValue).toList();
+    final collectionOptions =
+        availableIds.where((id) => id != dropoffValue).toList();
     final maxUnmapped = totalLockers.isOdd ? 1 : 0;
     final unmapped = totalLockers - usedIds.length;
     final isPairingComplete = unmapped <= maxUnmapped;
@@ -309,7 +317,8 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
         elevation: 0,
         title: const Text(
           'Configuration',
-          style: TextStyle(fontFamily: 'Metropolis', fontWeight: FontWeight.w800),
+          style:
+              TextStyle(fontFamily: 'Metropolis', fontWeight: FontWeight.w800),
         ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
@@ -325,7 +334,8 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text('Locker backend', style: AdminTextStyles.sectionTitle),
+                  const Text('Locker backend',
+                      style: AdminTextStyles.sectionTitle),
                   const SizedBox(height: 10),
                   SegmentedButton<String>(
                     style: SegmentedButton.styleFrom(
@@ -334,7 +344,9 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                       selectedBackgroundColor: AppColors.teal,
                       selectedForegroundColor: Colors.white,
                       side: const BorderSide(color: AppColors.panelBorder),
-                      textStyle: const TextStyle(fontFamily: 'Metropolis', fontWeight: FontWeight.w600),
+                      textStyle: const TextStyle(
+                          fontFamily: 'Metropolis',
+                          fontWeight: FontWeight.w600),
                     ),
                     segments: const [
                       ButtonSegment(
@@ -368,54 +380,56 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                 ],
               ),
             ),
-            const SizedBox(height: 16),
-            AdminSectionCard(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Kiosk mode', style: AdminTextStyles.sectionTitle),
-                        const SizedBox(height: 6),
-                        const Text(
-                          'Frameless, fullscreen windows — for a Raspberry '
-                          'Pi/kiosk deployment. Leave off for normal window '
-                          'chrome during development. Takes effect the next '
-                          'time each window is restarted, not immediately.',
-                          style: AdminTextStyles.body,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Switch(
-                    value: _kioskMode,
-                    // `activeColor` (not the newer `activeThumbColor`) for
-                    // compatibility with older pinned Flutter SDKs — see
-                    // the same reasoning on `Colors.green.withOpacity` used
-                    // elsewhere in the admin pages.
-                    activeColor: AppColors.teal,
-                    activeTrackColor: AppColors.teal.withOpacity(0.4),
-                    inactiveThumbColor: Colors.white70,
-                    inactiveTrackColor: Colors.white24,
-                    onChanged: (value) => setState(() => _kioskMode = value),
-                  ),
-                ],
-              ),
-            ),
+            // const SizedBox(height: 16),
+            // AdminSectionCard(
+            //   child: Row(
+            //     crossAxisAlignment: CrossAxisAlignment.start,
+            //     children: [
+            //       const Expanded(
+            //         child: Column(
+            //           crossAxisAlignment: CrossAxisAlignment.start,
+            //           children: [
+            //             Text('Kiosk mode', style: AdminTextStyles.sectionTitle),
+            //             SizedBox(height: 6),
+            //             Text(
+            //               'Frameless, fullscreen windows — for a Raspberry '
+            //               'Pi/kiosk deployment. Leave off for normal window '
+            //               'chrome during development. Takes effect the next '
+            //               'time each window is restarted, not immediately.',
+            //               style: AdminTextStyles.body,
+            //             ),
+            //           ],
+            //         ),
+            //       ),
+            //       const SizedBox(width: 16),
+            //       Switch(
+            //         value: _kioskMode,
+            //         // `activeColor` (not the newer `activeThumbColor`) for
+            //         // compatibility with older pinned Flutter SDKs — see
+            //         // the same reasoning on `Colors.green.withOpacity` used
+            //         // elsewhere in the admin pages.
+            //         activeColor: AppColors.teal,
+            //         activeTrackColor: AppColors.teal.withOpacity(0.4),
+            //         inactiveThumbColor: Colors.white70,
+            //         inactiveTrackColor: Colors.white24,
+            //         onChanged: (value) => setState(() => _kioskMode = value),
+            //       ),
+            //     ],
+            //   ),
+            // ),
             const SizedBox(height: 16),
             AdminSectionCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text('Locker backend address (IP:PORT)', style: AdminTextStyles.sectionTitle),
+                  const Text('Locker backend address (IP:PORT)',
+                      style: AdminTextStyles.sectionTitle),
                   const SizedBox(height: 10),
                   KeyboardTextField(
                     controller: _addressController,
                     style: AdminTextStyles.fieldInput,
-                    decoration: AdminInputStyle.fieldDecoration(hint: '192.168.8.107:7777'),
+                    decoration: AdminInputStyle.fieldDecoration(
+                        hint: '192.168.8.107:7777'),
                     onSubmitted: (_) => _save(),
                   ),
                   const SizedBox(height: 12),
@@ -443,7 +457,8 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                             _connectionResult!,
                             style: TextStyle(
                               fontFamily: 'Metropolis',
-                              color: _connectionResult!.startsWith('Unit responded')
+                              color: _connectionResult!
+                                      .startsWith('Unit responded')
                                   ? Colors.greenAccent[400]
                                   : Colors.redAccent[100],
                             ),
@@ -482,7 +497,9 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                     children: [
                       OutlinedButton.icon(
                         style: AdminInputStyle.outlinedButton,
-                        onPressed: (_syncingLockers || !isGrpc) ? null : _syncLockersFromHardware,
+                        onPressed: (_syncingLockers || !isGrpc)
+                            ? null
+                            : _syncLockersFromHardware,
                         icon: _syncingLockers
                             ? const SizedBox(
                                 width: 16,
@@ -533,7 +550,8 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Paired lockers', style: AdminTextStyles.sectionTitle),
+                            Text('Paired lockers',
+                                style: AdminTextStyles.sectionTitle),
                             SizedBox(height: 6),
                             Text(
                               'For a wall-mounted setup where a drop-off '
@@ -555,7 +573,8 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                         activeTrackColor: AppColors.teal.withOpacity(0.4),
                         inactiveThumbColor: Colors.white70,
                         inactiveTrackColor: Colors.white24,
-                        onChanged: (value) => setState(() => _pairedMode = value),
+                        onChanged: (value) =>
+                            setState(() => _pairedMode = value),
                       ),
                     ],
                   ),
@@ -563,42 +582,43 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
               ),
             ),
             if (_pairedMode) ...[
+              // const SizedBox(height: 16),
+              // AdminSectionCard(
+              //   child: Column(
+              //     crossAxisAlignment: CrossAxisAlignment.stretch,
+              //     children: [
+              //       const Text('Board layout (optional)', style: AdminTextStyles.sectionTitle),
+              //       const SizedBox(height: 6),
+              //       const Text(
+              //         'Only affects the wording shown to customers/admins '
+              //         '— e.g. "Board 2, Locker 3" instead of a raw number '
+              //         '— so it matches what\'s printed on the physical '
+              //         'door. Doesn\'t affect pairing at all. How many '
+              //         'lockers belong to each board, in the same order as '
+              //         'the locker mapping above (comma-separated). Leave '
+              //         'blank to just show plain numbers.',
+              //         style: AdminTextStyles.body,
+              //       ),
+              //       const SizedBox(height: 10),
+              //       KeyboardTextField(
+              //         controller: _boardCountsController,
+              //         style: AdminTextStyles.fieldInput,
+              //         decoration: AdminInputStyle.fieldDecoration(
+              //           hint: '4,4,4,4',
+              //           errorText: _boardCountsError,
+              //         ),
+              //         onSubmitted: (_) => _save(),
+              //       ),
+              //     ],
+              //   ),
+              // ),
               const SizedBox(height: 16),
               AdminSectionCard(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Text('Board layout (optional)', style: AdminTextStyles.sectionTitle),
-                    const SizedBox(height: 6),
-                    const Text(
-                      'Only affects the wording shown to customers/admins '
-                      '— e.g. "Board 2, Locker 3" instead of a raw number '
-                      '— so it matches what\'s printed on the physical '
-                      'door. Doesn\'t affect pairing at all. How many '
-                      'lockers belong to each board, in the same order as '
-                      'the locker mapping above (comma-separated). Leave '
-                      'blank to just show plain numbers.',
-                      style: AdminTextStyles.body,
-                    ),
-                    const SizedBox(height: 10),
-                    KeyboardTextField(
-                      controller: _boardCountsController,
-                      style: AdminTextStyles.fieldInput,
-                      decoration: AdminInputStyle.fieldDecoration(
-                        hint: '4,4,4,4',
-                        errorText: _boardCountsError,
-                      ),
-                      onSubmitted: (_) => _save(),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              AdminSectionCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text('Locker pairing', style: AdminTextStyles.sectionTitle),
+                    const Text('Locker pairing',
+                        style: AdminTextStyles.sectionTitle),
                     const SizedBox(height: 6),
                     const Text(
                       'Pick any two unpaired lockers and link them — the '
@@ -641,12 +661,15 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                             value: dropoffValue,
                             dropdownColor: AppColors.adminFieldFill,
                             style: AdminTextStyles.fieldInput,
-                            decoration: AdminInputStyle.fieldDecoration(hint: 'Drop-off locker'),
+                            decoration: AdminInputStyle.fieldDecoration(
+                                hint: 'Drop-off locker'),
                             items: [
                               for (final id in dropoffOptions)
-                                DropdownMenuItem(value: id, child: Text('Locker $id')),
+                                DropdownMenuItem(
+                                    value: id, child: Text('Locker $id')),
                             ],
-                            onChanged: (value) => setState(() => _selectedDropoffId = value),
+                            onChanged: (value) =>
+                                setState(() => _selectedDropoffId = value),
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -657,12 +680,15 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                             value: collectionValue,
                             dropdownColor: AppColors.adminFieldFill,
                             style: AdminTextStyles.fieldInput,
-                            decoration: AdminInputStyle.fieldDecoration(hint: 'Collection locker'),
+                            decoration: AdminInputStyle.fieldDecoration(
+                                hint: 'Collection locker'),
                             items: [
                               for (final id in collectionOptions)
-                                DropdownMenuItem(value: id, child: Text('Locker $id')),
+                                DropdownMenuItem(
+                                    value: id, child: Text('Locker $id')),
                             ],
-                            onChanged: (value) => setState(() => _selectedCollectionId = value),
+                            onChanged: (value) =>
+                                setState(() => _selectedCollectionId = value),
                           ),
                         ),
                       ],
@@ -670,9 +696,10 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                     const SizedBox(height: 10),
                     OutlinedButton.icon(
                       style: AdminInputStyle.outlinedButton,
-                      onPressed: (dropoffValue != null && collectionValue != null)
-                          ? _addPendingPair
-                          : null,
+                      onPressed:
+                          (dropoffValue != null && collectionValue != null)
+                              ? _addPendingPair
+                              : null,
                       icon: const Icon(Icons.link),
                       label: const Text('Add pair'),
                     ),
@@ -682,11 +709,13 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                         children: [
                           Expanded(
                             child: Text('Drop-off locker',
-                                style: AdminTextStyles.body.copyWith(fontWeight: FontWeight.bold)),
+                                style: AdminTextStyles.body
+                                    .copyWith(fontWeight: FontWeight.bold)),
                           ),
                           Expanded(
                             child: Text('Collection locker',
-                                style: AdminTextStyles.body.copyWith(fontWeight: FontWeight.bold)),
+                                style: AdminTextStyles.body
+                                    .copyWith(fontWeight: FontWeight.bold)),
                           ),
                           const SizedBox(width: 40),
                         ],
@@ -696,15 +725,18 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                         Row(
                           children: [
                             Expanded(
-                              child: Text('${_pendingPairs[i].dropoffId}', style: AdminTextStyles.fieldInput),
+                              child: Text('${_pendingPairs[i].dropoffId}',
+                                  style: AdminTextStyles.fieldInput),
                             ),
                             Expanded(
-                              child: Text('${_pendingPairs[i].collectionId}', style: AdminTextStyles.fieldInput),
+                              child: Text('${_pendingPairs[i].collectionId}',
+                                  style: AdminTextStyles.fieldInput),
                             ),
                             SizedBox(
                               width: 40,
                               child: IconButton(
-                                icon: const Icon(Icons.close, size: 18, color: Colors.white54),
+                                icon: const Icon(Icons.close,
+                                    size: 18, color: Colors.white54),
                                 tooltip: 'Remove pair',
                                 onPressed: () => _removePendingPair(i),
                               ),
@@ -718,7 +750,9 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                       const SizedBox(height: 10),
                       Text(
                         _pairingError!,
-                        style: TextStyle(fontFamily: 'Metropolis', color: Colors.redAccent[100]),
+                        style: TextStyle(
+                            fontFamily: 'Metropolis',
+                            color: Colors.redAccent[100]),
                       ),
                     ],
                   ],
@@ -751,7 +785,8 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
               const SizedBox(height: 16),
               Text(
                 _savedMessage!,
-                style: TextStyle(fontFamily: 'Metropolis', color: Colors.greenAccent[400]),
+                style: TextStyle(
+                    fontFamily: 'Metropolis', color: Colors.greenAccent[400]),
               ),
             ],
           ],

@@ -30,7 +30,7 @@
   ],
   "locker_address": "10.0.2.2:7890",
   "locker_backend": "grpc",
-  "kiosk_mode": false,
+  "kiosk_mode": true,
   "cvmain_config_dir": "/home/pi/cv/cvmain/config",
   "paired_locker_mode": true,
   "board_locker_counts": [],

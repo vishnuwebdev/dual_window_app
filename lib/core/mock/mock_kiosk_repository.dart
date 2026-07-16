@@ -610,18 +610,25 @@ class MockKioskRepository extends ChangeNotifier {
     ];
   }
 
+  /// Row label for the Admin Override / locker management table — plain
+  /// locker id, plus which paired locker id it's linked to (no board
+  /// info here, unlike [lockerDisplayLabel]'s customer-facing wording —
+  /// an admin managing lockers wants the raw ids that match `db.json`,
+  /// `config.json`'s pairing, and gRPC's own locker_num, not a
+  /// board-relative position).
   String _doorLabel(int lockerId) {
     final partner = _pairPartnerByLockerId[lockerId];
-    if (partner == null) return lockerDisplayLabel(lockerId);
+    if (partner == null) return '$lockerId';
     final role = _collectionRoleLockerIds.contains(lockerId) ? 'Collection' : 'Drop-off';
-    return '${lockerDisplayLabel(lockerId)} ($role, paired with ${lockerDisplayLabel(partner)})';
+    return 'Locker $lockerId ($role, paired with Locker $partner)';
   }
 
-  /// Human-facing label for [lockerId] — what every customer- and
-  /// admin-facing screen should show instead of the raw flat id. Outside
-  /// paired mode (or for any id with no board info, which shouldn't
-  /// normally happen once paired mode is configured) this is just the
-  /// flat id itself, unchanged from before this feature existed.
+  /// Human-facing label for [lockerId] — what customer-facing drop-off/
+  /// collection screens show instead of the raw flat id (see
+  /// `DeliverPlaceParcelPage`/`CollectionCompletePage`). Outside paired
+  /// mode (or for any id with no board info, which shouldn't normally
+  /// happen once paired mode is configured) this is just the flat id
+  /// itself, unchanged from before this feature existed.
   ///
   /// In paired mode, the flat id is purely an internal/gRPC bookkeeping
   /// number — `SB2`'s third door might be flat id 7, but the door itself
@@ -630,6 +637,8 @@ class MockKioskRepository extends ChangeNotifier {
   /// looking for a door that doesn't say "7" anywhere; this returns
   /// "Board 2, Locker 3" instead, matching the confirmed requirement that
   /// on-screen locker numbers match what's actually printed on the door.
+  /// The Admin Override table intentionally does *not* use this — see
+  /// [_doorLabel] — since an admin managing lockers wants the plain ids.
   String lockerDisplayLabel(int lockerId) {
     final info = _boardInfoByLockerId[lockerId];
     if (info == null) return '$lockerId';

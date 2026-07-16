@@ -19,7 +19,8 @@ class AdminMenuPage extends StatefulWidget {
   State<AdminMenuPage> createState() => _AdminMenuPageState();
 }
 
-class _AdminMenuPageState extends State<AdminMenuPage> with InactivityTimerMixin {
+class _AdminMenuPageState extends State<AdminMenuPage>
+    with InactivityTimerMixin {
   @override
   void initState() {
     super.initState();
@@ -52,13 +53,13 @@ class _AdminMenuPageState extends State<AdminMenuPage> with InactivityTimerMixin
                   runSpacing: 24,
                   children: [
                     KioskButton(
-                      label: 'Cancel',
+                      label: 'Home',
                       width: 220,
                       height: 78,
                       onPressed: () => Navigator.of(context).pop(),
                     ),
                     KioskButton(
-                      label: 'Override',
+                      label: 'Locker Management',
                       width: 220,
                       height: 78,
                       onPressed: () => _push(const AdminOverridePage()),
@@ -67,35 +68,40 @@ class _AdminMenuPageState extends State<AdminMenuPage> with InactivityTimerMixin
                       label: 'Change\nPassword',
                       width: 220,
                       height: 78,
-                      textStyle: AppTextStyles.buttonLabel.copyWith(fontSize: 20),
+                      textStyle:
+                          AppTextStyles.buttonLabel.copyWith(fontSize: 20),
                       onPressed: () => _push(const AdminResetPage()),
                     ),
                     KioskButton(
                       label: 'Change Sms\ntemplate',
                       width: 220,
                       height: 78,
-                      textStyle: AppTextStyles.buttonLabel.copyWith(fontSize: 20),
+                      textStyle:
+                          AppTextStyles.buttonLabel.copyWith(fontSize: 20),
                       onPressed: () => _push(const AdminSmsTemplatePage()),
                     ),
                     KioskButton(
                       label: 'Change\nDropoff Pin',
                       width: 220,
                       height: 78,
-                      textStyle: AppTextStyles.buttonLabel.copyWith(fontSize: 20),
+                      textStyle:
+                          AppTextStyles.buttonLabel.copyWith(fontSize: 20),
                       onPressed: () => _push(const AdminDropoffPinPage()),
                     ),
                     KioskButton(
                       label: 'Configuration',
                       width: 220,
                       height: 78,
-                      textStyle: AppTextStyles.buttonLabel.copyWith(fontSize: 20),
+                      textStyle:
+                          AppTextStyles.buttonLabel.copyWith(fontSize: 20),
                       onPressed: () => _push(const ConfigurationPage()),
                     ),
                     KioskButton(
                       label: 'Unit\nRegistration',
                       width: 220,
                       height: 78,
-                      textStyle: AppTextStyles.buttonLabel.copyWith(fontSize: 20),
+                      textStyle:
+                          AppTextStyles.buttonLabel.copyWith(fontSize: 20),
                       onPressed: () => _push(const UnitRegistrationPage()),
                     ),
                   ],

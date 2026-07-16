@@ -1,4 +1,5 @@
 import 'package:desktop_multi_window/desktop_multi_window.dart';
+import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:screen_retriever/screen_retriever.dart';
 import 'package:window_manager/window_manager.dart';
@@ -65,14 +66,22 @@ class WindowService {
       await windowManager.setPosition(placement.position);
 
       // --- RASPBERRY PI KIOSK MODE ---------------------------------------
-      // Each window fills its entire HDMI output with no title bar when
-      // `ConfigService.kioskMode` is on (see the Configuration page's
-      // "Kiosk mode" switch, or set `"kiosk_mode": true` directly in
-      // config.json). Off by default so day-to-day development on
-      // macOS/Windows/Linux desktop still gets normal window chrome you can
-      // drag/resize freely. `ConfigService().initialize()` has already run
-      // by the time this is called — see `main.dart`.
-      if (ConfigService().kioskMode) {
+      // Each window fills its entire HDMI output with no title bar — no
+      // "Admin Console"/"Customer Display" text, no minimize/maximize/close
+      // buttons — either when `ConfigService.kioskMode` is on (see the
+      // Configuration page's "Kiosk mode" switch, or set
+      // `"kiosk_mode": true` directly in config.json), or automatically in
+      // any *release* build (`flutter build linux --release` and similar),
+      // regardless of that setting: a release build is the one that
+      // actually ships on the physical kiosk, so it should never show OS
+      // window chrome a customer/admin could use to resize, minimize, or
+      // close the app. `kReleaseMode` is false for `flutter run`/debug and
+      // profile builds, so day-to-day development on macOS/Windows/Linux
+      // desktop still gets normal window chrome you can drag/resize
+      // freely — this only forces kiosk framing for the artifact you'd
+      // actually hand to a Pi. `ConfigService().initialize()` has already
+      // run by the time this is called — see `main.dart`.
+      if (ConfigService().kioskMode || kReleaseMode) {
         await windowManager.setAsFrameless();
         await windowManager.setFullScreen(true);
       }
