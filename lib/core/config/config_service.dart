@@ -14,13 +14,15 @@ import '../utilities/logging.dart';
 /// the mock layer it's meant to outlive; `MockKioskRepository` converts
 /// these into its own `Locker` objects when it syncs.
 ///
-/// In `pairedLockerMode` (see [ConfigService.boardLockerCounts]), this list
-/// still holds *every* physical door across *every* slave board — nothing
-/// about a single entry says which board it's on or whether it's a
-/// drop-off or collection door. That role/pairing information is derived
-/// separately from [ConfigService.boardLockerCounts], which chunks this
-/// same flat, in-board-order list into boards and pairs sequential boards
-/// up — see `MockKioskRepository._applyBoardPairing`.
+/// In `pairedLockerMode`, this list still holds *every* physical door
+/// across *every* slave board — nothing about a single entry says which
+/// board it's on or whether it's a drop-off or collection door. Which
+/// lockers are paired together (and which side of a pair is which) is a
+/// separate, freely admin-chosen mapping — see
+/// [ConfigService.lockerPairMappings]. [ConfigService.boardLockerCounts]
+/// is unrelated to pairing now; it only drives the "Board N, Locker L"
+/// display label shown to customers/admins (see
+/// `MockKioskRepository.lockerDisplayLabel`).
 class LockerMappingEntry {
   const LockerMappingEntry({required this.id, required this.size});
 
@@ -43,6 +45,44 @@ class LockerMappingEntry {
 }
 
 const _validSizes = {'small', 'medium', 'large'};
+
+/// One admin-chosen drop-off/collection locker pairing — see
+/// `ConfigService.lockerPairMappings`. Unlike an earlier version of this
+/// feature, pairing is *not* derived automatically from board layout
+/// anymore: an admin freely picks any two not-yet-used lockers and links
+/// them, in whatever combination matches the real wiring (which doesn't
+/// have to follow "board N's door K pairs with board N+1's door K" — see
+/// the confirmed example pairing 9↔3 and 8↔10, which cross boards at
+/// different positions).
+class LockerPairMapping {
+  const LockerPairMapping({
+    required this.dropoffLockerId,
+    required this.collectionLockerId,
+  });
+
+  /// The locker id a customer drops a parcel into — this is the id
+  /// `MockKioskRepository.getDropoffCandidateLockers` offers as a pickable
+  /// drop-off target.
+  final int dropoffLockerId;
+
+  /// The linked locker id that physically opens when that parcel is
+  /// collected.
+  final int collectionLockerId;
+
+  Map<String, dynamic> toJson() =>
+      {'dropoffLockerId': dropoffLockerId, 'collectionLockerId': collectionLockerId};
+
+  static LockerPairMapping? tryFromJson(dynamic raw) {
+    if (raw is! Map) return null;
+    final dropoffLockerId = raw['dropoffLockerId'];
+    final collectionLockerId = raw['collectionLockerId'];
+    if (dropoffLockerId is! int || collectionLockerId is! int) return null;
+    return LockerPairMapping(
+      dropoffLockerId: dropoffLockerId,
+      collectionLockerId: collectionLockerId,
+    );
+  }
+}
 
 /// Single source of truth for every setting admins can change from the
 /// Admin menu, backed by a local `config.json` next to the app (mirroring
@@ -82,6 +122,7 @@ class ConfigService extends ChangeNotifier {
   static const String _kCvmainConfigDir = 'cvmain_config_dir';
   static const String _kPairedLockerMode = 'paired_locker_mode';
   static const String _kBoardLockerCounts = 'board_locker_counts';
+  static const String _kLockerPairMappings = 'locker_pair_mappings';
 
   static const String _defaultAdminPin = '12345';
   static const String _defaultDropOffPin = '12345';
@@ -142,6 +183,8 @@ class ConfigService extends ChangeNotifier {
 
   static const List<int> _defaultBoardLockerCounts = [];
 
+  static const List<LockerPairMapping> _defaultLockerPairMappings = [];
+
   String _adminPin = _defaultAdminPin;
   String _dropOffPin = _defaultDropOffPin;
   String _smsTemplate = _defaultSmsTemplate;
@@ -154,6 +197,7 @@ class ConfigService extends ChangeNotifier {
 
   bool _pairedLockerMode = _defaultPairedLockerMode;
   List<int> _boardLockerCounts = _defaultBoardLockerCounts;
+  List<LockerPairMapping> _lockerPairMappings = _defaultLockerPairMappings;
 
   StreamSubscription<FileSystemEvent>? _watchSubscription;
 
@@ -220,7 +264,7 @@ class ConfigService extends ChangeNotifier {
         _lockerAddress = json[_kLockerAddress] as String? ?? _defaultLockerAddress;
         _cvmainConfigDir = json[_kCvmainConfigDir] as String? ?? _defaultCvmainConfigDir;
 
-        var needsRewrite = json.length != 10 ||
+        var needsRewrite = json.length != 11 ||
             !json.containsKey(_kAdminPin) ||
             !json.containsKey(_kDropOffPin) ||
             !json.containsKey(_kSmsTemplate) ||
@@ -230,7 +274,8 @@ class ConfigService extends ChangeNotifier {
             !json.containsKey(_kKioskMode) ||
             !json.containsKey(_kCvmainConfigDir) ||
             !json.containsKey(_kPairedLockerMode) ||
-            !json.containsKey(_kBoardLockerCounts);
+            !json.containsKey(_kBoardLockerCounts) ||
+            !json.containsKey(_kLockerPairMappings);
 
         final rawPairedMode = json[_kPairedLockerMode];
         _pairedLockerMode =
@@ -243,6 +288,27 @@ class ConfigService extends ChangeNotifier {
         } else {
           _boardLockerCounts = _defaultBoardLockerCounts;
           if (rawBoardCounts != null) needsRewrite = true;
+        }
+
+        final rawPairMappings = json[_kLockerPairMappings];
+        if (rawPairMappings is List) {
+          if (rawPairMappings.isEmpty) {
+            _lockerPairMappings = _defaultLockerPairMappings;
+          } else {
+            final parsedPairs = rawPairMappings.map(LockerPairMapping.tryFromJson).toList();
+            if (parsedPairs.every((e) => e != null)) {
+              _lockerPairMappings = parsedPairs.cast<LockerPairMapping>();
+            } else {
+              // Malformed entries — fall back to empty rather than risk
+              // acting on a half-parsed pairing (unlocking the wrong
+              // physical door).
+              _lockerPairMappings = _defaultLockerPairMappings;
+              needsRewrite = true;
+            }
+          }
+        } else {
+          _lockerPairMappings = _defaultLockerPairMappings;
+          if (rawPairMappings != null) needsRewrite = true;
         }
 
         final rawKioskMode = json[_kKioskMode];
@@ -306,6 +372,7 @@ class ConfigService extends ChangeNotifier {
       _kCvmainConfigDir: _cvmainConfigDir,
       _kPairedLockerMode: _pairedLockerMode,
       _kBoardLockerCounts: _boardLockerCounts,
+      _kLockerPairMappings: _lockerPairMappings.map((e) => e.toJson()).toList(),
     }));
     notifyListeners();
   }
@@ -380,15 +447,14 @@ class ConfigService extends ChangeNotifier {
 
   /// Validates a comma-separated "lockers per board" list (e.g. `"4,4,4,4"`
   /// for four 4-locker boards) against the *current* locker mapping's
-  /// total door count — see [boardLockerCounts] for the full topology this
-  /// describes. Every rule here exists to stop a mismatched board layout
-  /// from ever reaching `MockKioskRepository`, since a wrong chunk
-  /// boundary there means pairing the wrong two physical doors together.
+  /// total door count — see [boardLockerCounts]. Optional: this is purely
+  /// a *display* aid now (see [boardLockerCounts]'s doc comment) — leaving
+  /// it blank is fine, the only rule is that if it's provided at all, it
+  /// has to actually add up to every configured locker so labels don't
+  /// silently go missing or wrong partway through the list.
   static String? validateBoardLockerCounts(String value, int totalLockers) {
     final stripped = stripWhitespace(value);
-    if (stripped.isEmpty) {
-      return 'Board sizes are required in paired mode.';
-    }
+    if (stripped.isEmpty) return null;
     final tokens = stripped.split(',');
     final counts = <int>[];
     for (final t in tokens) {
@@ -398,21 +464,64 @@ class ConfigService extends ChangeNotifier {
       }
       counts.add(n);
     }
-    if (counts.length < 2 || counts.length.isOdd) {
-      return 'Paired mode needs an even number of boards, two per pair '
-          '(got ${counts.length}).';
-    }
     final sum = counts.fold<int>(0, (a, b) => a + b);
     if (sum != totalLockers) {
       return 'Board sizes add up to $sum locker(s) but the locker mapping '
           'above has $totalLockers — they must match exactly.';
     }
-    for (var i = 0; i < counts.length; i += 2) {
-      if (counts[i] != counts[i + 1]) {
-        return 'Board ${i + 1} has ${counts[i]} locker(s) but its paired '
-            'board ${i + 2} has ${counts[i + 1]} — a pair\'s two boards '
-            'must have the same number of doors.';
+    return null;
+  }
+
+  /// Validates a proposed set of drop-off/collection locker pairings (see
+  /// [LockerPairMapping]) against the *current* locker mapping's total
+  /// door count — the rules an admin's freely-chosen pairing must satisfy
+  /// before `MockKioskRepository` will act on it:
+  ///
+  /// - Every id referenced must actually exist in [lockerMapping].
+  /// - A locker can never be paired with itself.
+  /// - A locker can appear in at most one pair, in either role — a
+  ///   duplicate would make it ambiguous which pairing actually applies
+  ///   when a customer drops something off there.
+  /// - Every locker must end up paired, with exactly one exception: if
+  ///   [totalLockers] is odd, one locker is allowed to stay unpaired
+  ///   (there's no way to pair an odd number of lockers up completely).
+  ///   Any *more* than that one leftover is rejected.
+  static String? validateLockerPairMappings(
+      List<LockerPairMapping> pairs, int totalLockers) {
+    if (totalLockers == 0) {
+      return 'Add lockers to the locker mapping above first.';
+    }
+
+    final used = <int>{};
+    for (final pair in pairs) {
+      if (pair.dropoffLockerId < 1 || pair.dropoffLockerId > totalLockers) {
+        return 'Locker ${pair.dropoffLockerId} does not exist (only '
+            '$totalLockers locker(s) configured).';
       }
+      if (pair.collectionLockerId < 1 || pair.collectionLockerId > totalLockers) {
+        return 'Locker ${pair.collectionLockerId} does not exist (only '
+            '$totalLockers locker(s) configured).';
+      }
+      if (pair.dropoffLockerId == pair.collectionLockerId) {
+        return 'Locker ${pair.dropoffLockerId} cannot be paired with itself.';
+      }
+      if (!used.add(pair.dropoffLockerId)) {
+        return 'Locker ${pair.dropoffLockerId} is used in more than one pair.';
+      }
+      if (!used.add(pair.collectionLockerId)) {
+        return 'Locker ${pair.collectionLockerId} is used in more than one pair.';
+      }
+    }
+
+    final maxUnmapped = totalLockers.isOdd ? 1 : 0;
+    final unmapped = totalLockers - used.length;
+    if (unmapped > maxUnmapped) {
+      return totalLockers.isOdd
+          ? 'All lockers must be paired except one (odd total of '
+              '$totalLockers) — currently ${used.length} of $totalLockers '
+              'are paired.'
+          : 'All $totalLockers lockers must be paired — currently '
+              '${used.length} are paired.';
     }
     return null;
   }
@@ -451,29 +560,55 @@ class ConfigService extends ChangeNotifier {
   /// `ConfigurationPage`'s text field.
   String get lockerMappingText => _lockerMapping.map((e) => e.size).join(',');
 
-  /// Whether "paired slave board" mode is on — see [boardLockerCounts] for
-  /// the physical topology this models. When true,
-  /// `MockKioskRepository` chunks [lockerMapping] into boards using
-  /// [boardLockerCounts] and pairs sequential boards up (board 1 with
-  /// board 2, board 3 with board 4, ...): a door used for drop-off on the
-  /// first board of a pair is linked to the matching door (same position
-  /// within the board) on the second board, and dropping a parcel off in
-  /// one occupies both — collection later opens specifically the second
-  /// board's door. See `MockKioskRepository._applyBoardPairing`.
+  /// Whether "paired slave board" mode is on: every locker has a matching
+  /// linked locker (see [lockerPairMappings]) that opens on collection
+  /// instead of the one that opened on drop-off, and both count as
+  /// occupied together. When true, `MockKioskRepository`:
+  ///
+  /// - Only offers [lockerPairMappings]'s drop-off-role lockers as
+  ///   drop-off targets (never the collection-role side).
+  /// - Won't allow *any* drop-off at all until [isLockerPairingComplete] —
+  ///   an incomplete pairing means there's no known door to open on
+  ///   collection for whatever a customer just dropped off.
+  /// - Freezes both linked ids onto the parcel record at drop-off time
+  ///   (`LockerItem.lockerId`/`.collectionLockerId`).
   bool get pairedLockerMode => _pairedLockerMode;
 
   /// How many consecutive entries of [lockerMapping] belong to each
   /// physical slave board, in board order — e.g. `[4, 4, 4, 4]` for four
-  /// 4-locker boards. Only meaningful when [pairedLockerMode] is true.
-  /// Must have an even length (boards pair up sequentially: index 0 with
-  /// 1, 2 with 3, ...) and its two entries within a pair must match (see
-  /// [validateBoardLockerCounts]) — a physical drop-off board and its
-  /// paired collection board always have the same number of doors.
+  /// 4-locker boards. Optional, and — unlike an earlier version of this
+  /// feature — has nothing to do with *pairing* anymore (see
+  /// [lockerPairMappings] for that); this only drives the "Board N,
+  /// Locker L" label `MockKioskRepository.lockerDisplayLabel` shows a
+  /// customer/admin instead of the raw internal locker id, since that's
+  /// what's actually printed on the physical door.
   List<int> get boardLockerCounts => List.unmodifiable(_boardLockerCounts);
 
   /// [boardLockerCounts] flattened to the comma-separated shorthand shown
   /// in `ConfigurationPage`'s "board sizes" field.
   String get boardLockerCountsText => _boardLockerCounts.join(',');
+
+  /// The admin-chosen drop-off/collection locker pairing — freely editable
+  /// (any not-yet-used locker can be linked to any other), not derived
+  /// from board layout. See [LockerPairMapping] and
+  /// `MockKioskRepository._applyExplicitPairMappings`, which is the only
+  /// thing that reads this. Only meaningful when [pairedLockerMode] is
+  /// true; empty otherwise.
+  List<LockerPairMapping> get lockerPairMappings =>
+      List.unmodifiable(_lockerPairMappings);
+
+  /// True when every configured locker is either paired, or is the single
+  /// allowed leftover if [lockerMapping] has an odd total — i.e.
+  /// [lockerPairMappings] passes [validateLockerPairMappings] as-is right
+  /// now. Always true outside [pairedLockerMode] (nothing to gate).
+  /// `MockKioskRepository.getDropoffCandidateLockers` refuses to offer
+  /// *any* locker for drop-off while this is false, per the confirmed
+  /// requirement that drop-off only opens up once pairing is fully done.
+  bool get isLockerPairingComplete {
+    if (!_pairedLockerMode) return true;
+    return validateLockerPairMappings(_lockerPairMappings, _lockerMapping.length) ==
+        null;
+  }
 
   Future<void> setPairedLockerMode(bool value) async {
     _pairedLockerMode = value;
@@ -484,15 +619,31 @@ class ConfigService extends ChangeNotifier {
   /// Parses and persists [boardLockerCounts] from its comma-separated text
   /// form — see [validateBoardLockerCounts], which this delegates to
   /// (validated against the *current* [lockerMapping] length). A rejected
-  /// value never reaches `config.json`, since a bad board-size list here
-  /// would make `MockKioskRepository` pair up the wrong physical doors.
+  /// value never reaches `config.json`. Purely a display/labeling concern
+  /// now — see [boardLockerCounts]'s doc comment — so an empty value is
+  /// always accepted (clears it back to "no board labels").
   Future<String?> setBoardLockerCounts(String value) async {
     final error = validateBoardLockerCounts(value, _lockerMapping.length);
     if (error != null) return error;
+    final stripped = stripWhitespace(value);
     _boardLockerCounts =
-        stripWhitespace(value).split(',').map(int.parse).toList();
+        stripped.isEmpty ? [] : stripped.split(',').map(int.parse).toList();
     await _persistConfig();
     logger.i('Board locker counts updated to: $_boardLockerCounts');
+    return null;
+  }
+
+  /// Validates and persists a freely admin-chosen locker pairing (see
+  /// [validateLockerPairMappings]) — every pair is checked before *any*
+  /// of them are written, so a partially-valid list never reaches
+  /// `config.json` and, transitively, never reaches
+  /// `MockKioskRepository`'s unlock logic.
+  Future<String?> setLockerPairMappings(List<LockerPairMapping> pairs) async {
+    final error = validateLockerPairMappings(pairs, _lockerMapping.length);
+    if (error != null) return error;
+    _lockerPairMappings = List.unmodifiable(pairs);
+    await _persistConfig();
+    logger.i('Locker pair mappings updated: ${_lockerPairMappings.length} pair(s).');
     return null;
   }
 
@@ -544,6 +695,23 @@ class ConfigService extends ChangeNotifier {
       for (var i = 0; i < sizes.length; i++)
         LockerMappingEntry(id: i + 1, size: sizes[i].toLowerCase()),
     ];
+
+    // A shorter mapping can leave `_lockerPairMappings` pointing at ids
+    // that no longer exist — drop any pair referencing one rather than
+    // risk `MockKioskRepository` acting on a stale pairing.
+    final maxId = _lockerMapping.length;
+    final validPairs = _lockerPairMappings
+        .where((p) => p.dropoffLockerId <= maxId && p.collectionLockerId <= maxId)
+        .toList();
+    if (validPairs.length != _lockerPairMappings.length) {
+      logger.i(
+        'Pruned ${_lockerPairMappings.length - validPairs.length} locker '
+        'pair mapping(s) that referenced ids beyond the new locker count '
+        '($maxId).',
+      );
+      _lockerPairMappings = validPairs;
+    }
+
     await _persistConfig();
     logger.i('Locker mapping updated to: $_lockerMapping');
     return null;
@@ -676,6 +844,7 @@ class ConfigService extends ChangeNotifier {
     _cvmainConfigDir = _defaultCvmainConfigDir;
     _pairedLockerMode = _defaultPairedLockerMode;
     _boardLockerCounts = _defaultBoardLockerCounts;
+    _lockerPairMappings = _defaultLockerPairMappings;
     await _persistConfig();
     logger.i('ConfigService reset to defaults');
   }

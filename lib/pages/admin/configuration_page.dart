@@ -31,6 +31,18 @@ class ConfigurationPage extends StatefulWidget {
   State<ConfigurationPage> createState() => _ConfigurationPageState();
 }
 
+/// One locker pairing being edited on-screen, before it's actually saved
+/// — see `_ConfigurationPageState._pendingPairs`. Mirrors
+/// `LockerPairMapping` (the persisted shape); kept as a separate tiny type
+/// so the in-progress editor list doesn't need to round-trip through
+/// `ConfigService` on every add/remove.
+class _PendingLockerPair {
+  const _PendingLockerPair({required this.dropoffId, required this.collectionId});
+
+  final int dropoffId;
+  final int collectionId;
+}
+
 class _ConfigurationPageState extends State<ConfigurationPage> {
   late final TextEditingController _addressController;
   late final TextEditingController _lockerMappingController;
@@ -46,16 +58,25 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
 
   // --- Paired slave-board mode ------------------------------------------
   //
-  // See `ConfigService.pairedLockerMode`/`boardLockerCounts`: an overlay
-  // on top of the flat "Locker mapping" above, for the "drop-off board
-  // mounted opposite a matching collection board" physical topology. Off
-  // by default. Unlike the flat mapping (which is *always* in effect),
-  // this is purely additive — the locker mapping above still lists every
-  // physical door, board by board; this just says how many doors belong
-  // to each board so sequential boards can be paired up.
+  // See `ConfigService.pairedLockerMode`. Off by default. Two independent
+  // pieces sit under this toggle:
+  //
+  // - `_boardCountsController` (optional): purely a *display* aid — see
+  //   `ConfigService.boardLockerCounts`'s doc comment — labels lockers as
+  //   "Board N, Locker L" instead of a raw number. Has no effect on which
+  //   lockers are actually paired.
+  // - `_pendingPairs` (required before drop-off works): the actual
+  //   drop-off/collection locker links, freely chosen below — any two
+  //   not-yet-used lockers can be linked, in any combination. See
+  //   `ConfigService.lockerPairMappings`.
   late final TextEditingController _boardCountsController;
   late bool _pairedMode;
   String? _boardCountsError;
+
+  final List<_PendingLockerPair> _pendingPairs = [];
+  int? _selectedDropoffId;
+  int? _selectedCollectionId;
+  String? _pairingError;
 
   @override
   void initState() {
@@ -70,6 +91,16 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
     _backend = _config.lockerBackend;
     _kioskMode = _config.kioskMode;
     _pairedMode = _config.pairedLockerMode;
+    _loadPendingPairsFromConfig();
+  }
+
+  void _loadPendingPairsFromConfig() {
+    _pendingPairs
+      ..clear()
+      ..addAll(_config.lockerPairMappings.map((p) => _PendingLockerPair(
+            dropoffId: p.dropoffLockerId,
+            collectionId: p.collectionLockerId,
+          )));
   }
 
   @override
@@ -87,14 +118,16 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
     await _config.setLockerBackend(_backend);
     await _config.setKioskMode(_kioskMode);
 
-    // The flat mapping is always saved first and always applies — paired
-    // mode is an overlay on top of it, not a replacement (see the class
-    // doc comment on `_boardCountsController`).
+    // The flat mapping is always saved first — the board layout and
+    // pairing below are both validated against *this* new total, so it
+    // has to land before either of them.
     final mappingError =
         await _config.setLockerMapping(_lockerMappingController.text.trim());
     if (mappingError != null) {
       setState(() {
         _lockerMappingError = mappingError;
+        _boardCountsError = null;
+        _pairingError = null;
         _savedMessage = null;
       });
       return;
@@ -109,6 +142,24 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
         setState(() {
           _lockerMappingError = null;
           _boardCountsError = boardCountsError;
+          _pairingError = null;
+          _savedMessage = null;
+        });
+        return;
+      }
+
+      final pairingError = await _config.setLockerPairMappings([
+        for (final p in _pendingPairs)
+          LockerPairMapping(
+            dropoffLockerId: p.dropoffId,
+            collectionLockerId: p.collectionId,
+          ),
+      ]);
+      if (pairingError != null) {
+        setState(() {
+          _lockerMappingError = null;
+          _boardCountsError = null;
+          _pairingError = pairingError;
           _savedMessage = null;
         });
         return;
@@ -118,6 +169,7 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
     setState(() {
       _lockerMappingError = null;
       _boardCountsError = null;
+      _pairingError = null;
       _connectionResult = null;
       _savedMessage = _backend == 'grpc'
           ? 'Saved. Real hardware mode — address: $address'
@@ -134,11 +186,36 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
       _backend = _config.lockerBackend;
       _kioskMode = _config.kioskMode;
       _pairedMode = _config.pairedLockerMode;
+      _loadPendingPairsFromConfig();
+      _selectedDropoffId = null;
+      _selectedCollectionId = null;
       _lockerMappingError = null;
       _boardCountsError = null;
+      _pairingError = null;
       _connectionResult = null;
       _syncResult = null;
       _savedMessage = 'Reset to defaults.';
+    });
+  }
+
+  void _addPendingPair() {
+    final dropoffId = _selectedDropoffId;
+    final collectionId = _selectedCollectionId;
+    if (dropoffId == null || collectionId == null || dropoffId == collectionId) {
+      return;
+    }
+    setState(() {
+      _pendingPairs.add(_PendingLockerPair(dropoffId: dropoffId, collectionId: collectionId));
+      _selectedDropoffId = null;
+      _selectedCollectionId = null;
+      _pairingError = null;
+    });
+  }
+
+  void _removePendingPair(int index) {
+    setState(() {
+      _pendingPairs.removeAt(index);
+      _pairingError = null;
     });
   }
 
@@ -201,6 +278,28 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
   @override
   Widget build(BuildContext context) {
     final isGrpc = _backend == 'grpc';
+
+    // Pairing UI state, derived fresh every build from `_pendingPairs` and
+    // the *currently saved* locker mapping (not whatever's unsaved in
+    // `_lockerMappingController` — see the "Locker pairing" section's
+    // helper text telling the admin to save the mapping above first).
+    final totalLockers = _config.lockerMapping.length;
+    final usedIds = _pendingPairs.expand((p) => [p.dropoffId, p.collectionId]).toSet();
+    final allLockerIds = List.generate(totalLockers, (i) => i + 1);
+    final availableIds = allLockerIds.where((id) => !usedIds.contains(id)).toList();
+    final dropoffValue =
+        (_selectedDropoffId != null && availableIds.contains(_selectedDropoffId))
+            ? _selectedDropoffId
+            : null;
+    final collectionValue =
+        (_selectedCollectionId != null && availableIds.contains(_selectedCollectionId))
+            ? _selectedCollectionId
+            : null;
+    final dropoffOptions = availableIds.where((id) => id != collectionValue).toList();
+    final collectionOptions = availableIds.where((id) => id != dropoffValue).toList();
+    final maxUnmapped = totalLockers.isOdd ? 1 : 0;
+    final unmapped = totalLockers - usedIds.length;
+    final isPairingComplete = unmapped <= maxUnmapped;
 
     return Scaffold(
       backgroundColor: AppColors.navy,
@@ -364,9 +463,8 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                   const Text(
                     'Locker mapping — one size per physical locker, in order '
                     '(small, medium, or large, comma-separated). Each locker\'s '
-                    'id is its position in this list. In paired mode below, '
-                    'this is every door on every board, board by board '
-                    '(e.g. board 1\'s doors, then board 2\'s, then board 3\'s...).',
+                    'id is its position in this list — that\'s the number used '
+                    'below to pair lockers together.',
                     style: AdminTextStyles.sectionTitle,
                   ),
                   const SizedBox(height: 10),
@@ -435,19 +533,16 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Paired slave boards', style: AdminTextStyles.sectionTitle),
+                            Text('Paired lockers', style: AdminTextStyles.sectionTitle),
                             SizedBox(height: 6),
                             Text(
-                              'For a wall-mounted setup where each drop-off '
-                              'board is paired with a matching collection '
-                              'board on the other side of the wall: a '
-                              'drop-off into locker N of the pair\'s '
-                              'drop-off board is collected by opening '
-                              'locker N of the paired collection board, '
-                              'and both doors show occupied until it\'s '
-                              'collected. Boards pair up sequentially — '
-                              'board 1 with board 2, board 3 with board '
-                              '4, and so on.',
+                              'For a wall-mounted setup where a drop-off '
+                              'door has a matching collection door wired '
+                              'to the same cavity: dropping a parcel off '
+                              'in one locker means it\'s collected by '
+                              'opening its linked locker instead, and '
+                              'both show occupied in between. Turn this '
+                              'on, then pair lockers below.',
                               style: AdminTextStyles.body,
                             ),
                           ],
@@ -464,15 +559,25 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                       ),
                     ],
                   ),
-                  if (_pairedMode) ...[
-                    const SizedBox(height: 16),
+                ],
+              ),
+            ),
+            if (_pairedMode) ...[
+              const SizedBox(height: 16),
+              AdminSectionCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text('Board layout (optional)', style: AdminTextStyles.sectionTitle),
+                    const SizedBox(height: 6),
                     const Text(
-                      'Board sizes — how many lockers belong to each '
-                      'board, in the same order as the locker mapping '
-                      'above (comma-separated). Needs an even number of '
-                      'boards, and a pair\'s two boards must match. E.g. '
-                      '"4,4,4,4" for four 4-locker boards (board 1 paired '
-                      'with board 2, board 3 with board 4).',
+                      'Only affects the wording shown to customers/admins '
+                      '— e.g. "Board 2, Locker 3" instead of a raw number '
+                      '— so it matches what\'s printed on the physical '
+                      'door. Doesn\'t affect pairing at all. How many '
+                      'lockers belong to each board, in the same order as '
+                      'the locker mapping above (comma-separated). Leave '
+                      'blank to just show plain numbers.',
                       style: AdminTextStyles.body,
                     ),
                     const SizedBox(height: 10),
@@ -486,9 +591,140 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                       onSubmitted: (_) => _save(),
                     ),
                   ],
-                ],
+                ),
               ),
-            ),
+              const SizedBox(height: 16),
+              AdminSectionCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text('Locker pairing', style: AdminTextStyles.sectionTitle),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Pick any two unpaired lockers and link them — the '
+                      'first is the drop-off door, the second is where '
+                      'that parcel is collected from. Every locker can '
+                      'only be used once. If the locker mapping above has '
+                      'an odd count, one locker is allowed to stay '
+                      'unpaired. Drop-off stays unavailable to customers '
+                      'until pairing below is complete. Save the locker '
+                      'mapping above first if you just changed it — the '
+                      'lockers offered below come from the saved count.',
+                      style: AdminTextStyles.body,
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      totalLockers == 0
+                          ? 'No lockers configured yet.'
+                          : isPairingComplete
+                              ? 'All set — ${usedIds.length} of $totalLockers locker(s) paired.'
+                              : '${usedIds.length} of $totalLockers locker(s) paired — '
+                                  'drop-off stays disabled until this is complete.',
+                      style: TextStyle(
+                        fontFamily: 'Metropolis',
+                        fontWeight: FontWeight.w600,
+                        color: isPairingComplete
+                            ? Colors.greenAccent[400]
+                            : Colors.amber[300],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<int>(
+                            // `value` (not the newer `initialValue`) for
+                            // compatibility with older pinned Flutter SDKs
+                            // — same reasoning as `activeColor` elsewhere
+                            // on this page.
+                            value: dropoffValue,
+                            dropdownColor: AppColors.adminFieldFill,
+                            style: AdminTextStyles.fieldInput,
+                            decoration: AdminInputStyle.fieldDecoration(hint: 'Drop-off locker'),
+                            items: [
+                              for (final id in dropoffOptions)
+                                DropdownMenuItem(value: id, child: Text('Locker $id')),
+                            ],
+                            onChanged: (value) => setState(() => _selectedDropoffId = value),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        const Icon(Icons.arrow_forward, color: Colors.white54),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: DropdownButtonFormField<int>(
+                            value: collectionValue,
+                            dropdownColor: AppColors.adminFieldFill,
+                            style: AdminTextStyles.fieldInput,
+                            decoration: AdminInputStyle.fieldDecoration(hint: 'Collection locker'),
+                            items: [
+                              for (final id in collectionOptions)
+                                DropdownMenuItem(value: id, child: Text('Locker $id')),
+                            ],
+                            onChanged: (value) => setState(() => _selectedCollectionId = value),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      style: AdminInputStyle.outlinedButton,
+                      onPressed: (dropoffValue != null && collectionValue != null)
+                          ? _addPendingPair
+                          : null,
+                      icon: const Icon(Icons.link),
+                      label: const Text('Add pair'),
+                    ),
+                    if (_pendingPairs.isNotEmpty) ...[
+                      const SizedBox(height: 18),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text('Drop-off locker',
+                                style: AdminTextStyles.body.copyWith(fontWeight: FontWeight.bold)),
+                          ),
+                          Expanded(
+                            child: Text('Collection locker',
+                                style: AdminTextStyles.body.copyWith(fontWeight: FontWeight.bold)),
+                          ),
+                          const SizedBox(width: 40),
+                        ],
+                      ),
+                      const Divider(color: AppColors.panelBorder),
+                      for (var i = 0; i < _pendingPairs.length; i++) ...[
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text('${_pendingPairs[i].dropoffId}', style: AdminTextStyles.fieldInput),
+                            ),
+                            Expanded(
+                              child: Text('${_pendingPairs[i].collectionId}', style: AdminTextStyles.fieldInput),
+                            ),
+                            SizedBox(
+                              width: 40,
+                              child: IconButton(
+                                icon: const Icon(Icons.close, size: 18, color: Colors.white54),
+                                tooltip: 'Remove pair',
+                                onPressed: () => _removePendingPair(i),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const Divider(height: 1, color: Colors.white12),
+                      ],
+                    ],
+                    if (_pairingError != null) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        _pairingError!,
+                        style: TextStyle(fontFamily: 'Metropolis', color: Colors.redAccent[100]),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 20),
             Row(
               children: [

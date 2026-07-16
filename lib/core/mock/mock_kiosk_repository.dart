@@ -66,12 +66,14 @@ import 'models.dart';
 /// ## Paired slave boards (`ConfigService.pairedLockerMode`)
 ///
 /// Real-world topology: two slave boards mounted on opposite faces of the
-/// same wall, board-for-board wired to the same physical cavities — one
-/// side used for drop-off, the other for collection. `_lockers` always
-/// contains *every* physical door as its own independent [Locker] (exactly
-/// like unpaired mode — nothing is hidden or merged there); what paired
-/// mode adds is a derived partner map (`_pairPartnerByLockerId`, built in
-/// `_applyBoardPairing` from `ConfigService.boardLockerCounts`) saying
+/// same wall, wired so a given door on one side shares a physical cavity
+/// with a specific door on the other — one side used for drop-off, the
+/// other for collection. `_lockers` always contains *every* physical door
+/// as its own independent [Locker] (exactly like unpaired mode — nothing
+/// is hidden or merged there); what paired mode adds is a partner map
+/// (`_pairPartnerByLockerId`, built in `_applyExplicitPairMappings` from
+/// `ConfigService.lockerPairMappings` — an admin freely picks which locker
+/// links to which, not derived automatically from board position) saying
 /// which drop-off-side door id is linked to which collection-side door id.
 /// A drop-off freezes both ids onto the `LockerItem` it creates
 /// (`LockerItem.lockerId`/`.collectionLockerId`), so from then on that
@@ -91,9 +93,10 @@ class MockKioskRepository extends ChangeNotifier {
   StreamSubscription<FileSystemEvent>? _watchSubscription;
 
   /// Drop-off-side locker id -> its linked collection-side locker id, and
-  /// vice versa (populated both directions) — derived from
-  /// `ConfigService.boardLockerCounts` in `_applyBoardPairing`. Only
-  /// populated in paired mode; empty otherwise.
+  /// vice versa (populated both directions) — read straight from the
+  /// admin's freely-chosen `ConfigService.lockerPairMappings` in
+  /// `_applyExplicitPairMappings`. Only populated in paired mode; empty
+  /// otherwise.
   final Map<int, int> _pairPartnerByLockerId = {};
 
   /// The subset of `_pairPartnerByLockerId`'s keys that are collection-side
@@ -273,11 +276,11 @@ class MockKioskRepository extends ChangeNotifier {
   /// Rebuilds `_lockers` from `ConfigService.lockerMapping` — called once
   /// at construction and again every time an admin saves a new mapping in
   /// `ConfigurationPage`. `_lockers` always holds *every* physical door,
-  /// whether or not paired mode is on — see [_applyBoardPairing] for the
-  /// paired-mode overlay this derives on top of that flat list. Any
-  /// in-flight parcel `Item`s whose locker (or paired locker) no longer
-  /// exists after the change are dropped, so the app never shows a phantom
-  /// "occupied" locker that isn't part of the current mapping.
+  /// whether or not paired mode is on — see [_applyExplicitPairMappings]
+  /// for the paired-mode overlay this derives on top of that flat list.
+  /// Any in-flight parcel `Item`s whose locker (or paired locker) no
+  /// longer exists after the change are dropped, so the app never shows a
+  /// phantom "occupied" locker that isn't part of the current mapping.
   void _syncLockersFromConfig() {
     final config = ConfigService();
     _pairPartnerByLockerId.clear();
@@ -288,9 +291,14 @@ class MockKioskRepository extends ChangeNotifier {
         .map((entry) => Locker(id: entry.id, size: _parseSize(entry.size)))
         .toList();
 
-    if (config.pairedLockerMode && config.boardLockerCounts.isNotEmpty) {
+    if (config.boardLockerCounts.isNotEmpty) {
+      // Board layout is purely a display/labeling concern now — see
+      // `ConfigService.boardLockerCounts`'s doc comment — so this applies
+      // whether or not paired mode itself is on.
       _applyBoardLayout(config.boardLockerCounts);
-      _applyBoardPairing(config.boardLockerCounts);
+    }
+    if (config.pairedLockerMode) {
+      _applyExplicitPairMappings(config.lockerPairMappings);
     }
 
     final validIds = _lockers.map((l) => l.id).toSet();
@@ -306,9 +314,9 @@ class MockKioskRepository extends ChangeNotifier {
   /// [boardCounts] and records each locker's board number (1-based —
   /// board 1 is "SB1") and local position (1-based, matching what's
   /// physically printed on that door) into `_boardInfoByLockerId`. Purely
-  /// a labeling pass — [_applyBoardPairing] does the actual pairing
-  /// separately, since pairing can legitimately skip an invalid pair while
-  /// every board's own layout is still worth recording for display.
+  /// a display/labeling pass — entirely independent of
+  /// [_applyExplicitPairMappings], which does the actual pairing from a
+  /// separately admin-chosen mapping, not from board position.
   void _applyBoardLayout(List<int> boardCounts) {
     var offset = 0;
     for (var boardIndex = 0; boardIndex < boardCounts.length; boardIndex++) {
@@ -329,56 +337,42 @@ class MockKioskRepository extends ChangeNotifier {
     }
   }
 
-  /// Chunks the already-built `_lockers` (in the exact board order
-  /// `ConfigService.lockerMapping` was entered in) into per-board slices
-  /// using [boardCounts], then pairs sequential boards up: board 0 with
-  /// board 1 (board 0 = drop-off side, board 1 = collection side), board 2
-  /// with board 3, and so on — matching the confirmed "always sequential
-  /// pairs" topology. Populates `_pairPartnerByLockerId` (bidirectional)
-  /// and `_collectionRoleLockerIds`.
+  /// Populates `_pairPartnerByLockerId` (bidirectional) and
+  /// `_collectionRoleLockerIds` straight from the admin's freely-chosen
+  /// [pairs] (see `ConfigService.lockerPairMappings`) — no board-position
+  /// assumption anymore (an earlier version of this feature auto-derived
+  /// pairing from adjacent boards at matching positions; pairing is now
+  /// entirely explicit, so any two lockers can be linked regardless of
+  /// which boards they're physically on).
   ///
-  /// `ConfigService.validateBoardLockerCounts` already guarantees an even
-  /// board count and that each pair's two boards have equal door counts
-  /// before this is ever persisted, but this re-checks defensively (a
-  /// stale/corrupted config.json could in principle skip that validation)
-  /// rather than risk pairing up the wrong two doors.
-  void _applyBoardPairing(List<int> boardCounts) {
-    if (boardCounts.length.isOdd) {
-      logger.w(
-        'MockKioskRepository: odd number of boards in board_locker_counts '
-        '(${boardCounts.length}) — paired mode needs boards in pairs, '
-        'ignoring pairing entirely this sync.',
-      );
-      return;
-    }
-
-    var offset = 0;
-    for (var pairIndex = 0; pairIndex * 2 < boardCounts.length; pairIndex++) {
-      final dropoffCount = boardCounts[pairIndex * 2];
-      final collectionCount = boardCounts[pairIndex * 2 + 1];
-      final dropoffStart = offset;
-      final collectionStart = offset + dropoffCount;
-      final pairEnd = collectionStart + collectionCount;
-
-      if (dropoffCount != collectionCount || pairEnd > _lockers.length) {
+  /// `ConfigService.validateLockerPairMappings` already guarantees no
+  /// locker appears in more than one pair before this is ever persisted,
+  /// but this re-checks defensively (a stale/corrupted config.json could
+  /// in principle skip that validation) rather than risk silently
+  /// overwriting one pair's link with another's.
+  void _applyExplicitPairMappings(List<LockerPairMapping> pairs) {
+    final validIds = _lockers.map((l) => l.id).toSet();
+    for (final pair in pairs) {
+      final dropoffId = pair.dropoffLockerId;
+      final collectionId = pair.collectionLockerId;
+      if (!validIds.contains(dropoffId) || !validIds.contains(collectionId)) {
         logger.w(
-          'MockKioskRepository: board pair $pairIndex is invalid '
-          '(dropoff=$dropoffCount, collection=$collectionCount, '
-          'total lockers=${_lockers.length}) — skipping pairing for this '
-          'pair only.',
+          'MockKioskRepository: locker pair ($dropoffId, $collectionId) '
+          'references a locker id outside the current mapping — skipping.',
         );
-        offset = pairEnd;
         continue;
       }
-
-      for (var i = 0; i < dropoffCount; i++) {
-        final dropoffId = _lockers[dropoffStart + i].id;
-        final collectionId = _lockers[collectionStart + i].id;
-        _pairPartnerByLockerId[dropoffId] = collectionId;
-        _pairPartnerByLockerId[collectionId] = dropoffId;
-        _collectionRoleLockerIds.add(collectionId);
+      if (_pairPartnerByLockerId.containsKey(dropoffId) ||
+          _pairPartnerByLockerId.containsKey(collectionId)) {
+        logger.w(
+          'MockKioskRepository: locker pair ($dropoffId, $collectionId) '
+          'reuses an id already claimed by another pair — skipping.',
+        );
+        continue;
       }
-      offset = pairEnd;
+      _pairPartnerByLockerId[dropoffId] = collectionId;
+      _pairPartnerByLockerId[collectionId] = dropoffId;
+      _collectionRoleLockerIds.add(collectionId);
     }
   }
 
@@ -405,11 +399,22 @@ class MockKioskRepository extends ChangeNotifier {
 
   /// Lockers a customer is allowed to pick for a *drop-off*. Outside
   /// paired mode this is every locker (unchanged behavior). In paired
-  /// mode, collection-side doors are never valid drop-off targets — a
-  /// customer should never be offered "Locker 9" if 9 is actually the
-  /// collection-side door of some pair, since nothing would ever be
-  /// physically placed there directly.
+  /// mode:
+  ///
+  /// - Returns nothing at all until `ConfigService.isLockerPairingComplete`
+  ///   — every locker has to actually be paired (or be the one allowed
+  ///   leftover on an odd total) before drop-off opens up at all, since an
+  ///   incomplete pairing means there's no known door to open on
+  ///   collection for whatever a customer would drop off in the meantime.
+  /// - Once complete, collection-side doors are still never offered — a
+  ///   customer should never be offered "Locker 9" if 9 is actually the
+  ///   collection-side door of some pair, since nothing would ever be
+  ///   physically placed there directly.
   List<Locker> getDropoffCandidateLockers() {
+    final config = ConfigService();
+    if (config.pairedLockerMode && !config.isLockerPairingComplete) {
+      return const [];
+    }
     if (_collectionRoleLockerIds.isEmpty) return List.unmodifiable(_lockers);
     return _lockers
         .where((l) => !_collectionRoleLockerIds.contains(l.id))

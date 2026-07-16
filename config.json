@@ -29,9 +29,23 @@
     }
   ],
   "locker_address": "10.0.2.2:7890",
-  "locker_backend": "mock",
+  "locker_backend": "grpc",
   "kiosk_mode": false,
   "cvmain_config_dir": "/home/pi/cv/cvmain/config",
   "paired_locker_mode": true,
-  "board_locker_counts": []
+  "board_locker_counts": [],
+  "locker_pair_mappings": [
+    {
+      "dropoffLockerId": 4,
+      "collectionLockerId": 2
+    },
+    {
+      "dropoffLockerId": 3,
+      "collectionLockerId": 5
+    },
+    {
+      "dropoffLockerId": 6,
+      "collectionLockerId": 1
+    }
+  ]
 }
