@@ -28,14 +28,20 @@ import 'configuration_page.dart';
 /// and checking either row's checkbox and hitting "Clear" clears/opens
 /// both doors (see `MockKioskRepository.clearLocker`); each row also gets
 /// its own small "Open" icon for opening just that one specific door.
-class AdminOverridePage extends StatefulWidget {
-  const AdminOverridePage({super.key});
+///
+/// Named `LockerManagementPage` (not `AdminOverridePage`, an earlier
+/// name carried over from the Android source's `AdminOverrideActivity`)
+/// to match the "Locker Management" label this is actually reached by
+/// from `AdminMenuPage` — the class/file name had drifted from the
+/// user-facing name.
+class LockerManagementPage extends StatefulWidget {
+  const LockerManagementPage({super.key});
 
   @override
-  State<AdminOverridePage> createState() => _AdminOverridePageState();
+  State<LockerManagementPage> createState() => _LockerManagementPageState();
 }
 
-class _AdminOverridePageState extends State<AdminOverridePage> {
+class _LockerManagementPageState extends State<LockerManagementPage> {
   final _repo = MockKioskRepository.instance;
   final Set<int> _selectedLockerIds = {};
 
@@ -206,10 +212,10 @@ class _AdminOverridePageState extends State<AdminOverridePage> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    _OverrideButton(label: 'Back', onPressed: () => Navigator.of(context).pop()),
-                    _OverrideButton(label: 'Clear', onPressed: _handleClear),
-                    _OverrideButton(label: 'Open', onPressed: _handleOpen),
-                    _OverrideButton(label: 'Open All', onPressed: _handleOpenAll),
+                    _ManagementButton(label: 'Back', onPressed: () => Navigator.of(context).pop()),
+                    _ManagementButton(label: 'Clear', onPressed: _handleClear),
+                    _ManagementButton(label: 'Open', onPressed: _handleOpen),
+                    _ManagementButton(label: 'Open All', onPressed: _handleOpenAll),
                   ],
                 ),
               ),
@@ -225,8 +231,8 @@ class _AdminOverridePageState extends State<AdminOverridePage> {
 /// the reference design's plain filled buttons (distinct from the kiosk
 /// app's bordered `KioskButton`, since this screen sits on a white
 /// background rather than the navy kiosk chrome).
-class _OverrideButton extends StatelessWidget {
-  const _OverrideButton({required this.label, required this.onPressed});
+class _ManagementButton extends StatelessWidget {
+  const _ManagementButton({required this.label, required this.onPressed});
 
   final String label;
   final VoidCallback onPressed;

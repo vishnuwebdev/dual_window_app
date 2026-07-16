@@ -46,7 +46,7 @@ class LockerItem {
   final DateTime creationDate;
 }
 
-/// One row in the Admin Override table — one per physical locker door.
+/// One row in the Locker Management table — one per physical locker door.
 /// Outside paired mode this is exactly one row per [Locker] (unchanged
 /// from before pairing existed). In `ConfigService.pairedLockerMode`,
 /// [Locker]/`MockKioskRepository.getAllLockers()` already contains every

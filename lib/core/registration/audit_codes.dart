@@ -36,7 +36,7 @@ class AuditLogPriority {
 /// from this app land in the same code space VaultGroup's platform already
 /// understands from the Android kiosk. Only a subset of these are
 /// currently wired up (see `deliver_place_parcel_page.dart`,
-/// `collection_complete_page.dart`, `admin_override_page.dart`) — add
+/// `collection_complete_page.dart`, `locker_management_page.dart`) — add
 /// calls at other call sites using these same codes as needed.
 class AuditCodes {
   AuditCodes._();

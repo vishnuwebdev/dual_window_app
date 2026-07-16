@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:flutter/material.dart';
 
 import '../../core/config/config_service.dart';
@@ -89,7 +90,15 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
         TextEditingController(text: _config.lockerMappingText);
     _boardCountsController =
         TextEditingController(text: _config.boardLockerCountsText);
-    _backend = _config.lockerBackend;
+    // The "Mock" segment is only ever rendered in debug builds (see the
+    // `SegmentedButton` below) — a *release* build force-coerces to
+    // 'grpc' here even if a config.json carried over from debug testing
+    // still has 'mock' saved, so there's never a `selected` value with no
+    // matching visible segment (which `SegmentedButton` would assert on),
+    // and so a release build never silently sits in mock mode.
+    _backend = (kReleaseMode && _config.lockerBackend == 'mock')
+        ? 'grpc'
+        : _config.lockerBackend;
     _kioskMode = _config.kioskMode;
     _pairedMode = _config.pairedLockerMode;
     _loadPendingPairsFromConfig();
@@ -184,7 +193,9 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
       _addressController.text = _config.lockerAddress;
       _lockerMappingController.text = _config.lockerMappingText;
       _boardCountsController.text = _config.boardLockerCountsText;
-      _backend = _config.lockerBackend;
+      _backend = (kReleaseMode && _config.lockerBackend == 'mock')
+          ? 'grpc'
+          : _config.lockerBackend;
       _kioskMode = _config.kioskMode;
       _pairedMode = _config.pairedLockerMode;
       _loadPendingPairsFromConfig();
@@ -348,13 +359,19 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                           fontFamily: 'Metropolis',
                           fontWeight: FontWeight.w600),
                     ),
-                    segments: const [
-                      ButtonSegment(
-                        value: 'mock',
-                        label: Text('Mock'),
-                        icon: Icon(Icons.developer_mode),
-                      ),
-                      ButtonSegment(
+                    // "Mock" is a dev/testing convenience — it never
+                    // touches a physical unit — so it's hidden entirely in
+                    // release builds (`flutter build ... --release`),
+                    // leaving only "Real hardware" selectable. Debug runs
+                    // (`flutter run`) keep both segments, unchanged.
+                    segments: [
+                      if (!kReleaseMode)
+                        const ButtonSegment(
+                          value: 'mock',
+                          label: Text('Mock'),
+                          icon: Icon(Icons.developer_mode),
+                        ),
+                      const ButtonSegment(
                         value: 'grpc',
                         label: Text('Real hardware'),
                         icon: Icon(Icons.lock_outline),

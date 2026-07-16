@@ -3,15 +3,16 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../widgets/kiosk/kiosk.dart';
 import 'admin_dropoff_pin_page.dart';
-import 'admin_override_page.dart';
 import 'admin_reset_page.dart';
 import 'admin_sms_template_page.dart';
 import 'configuration_page.dart';
+import 'locker_management_page.dart';
 import 'unit_registration_page.dart';
 
 /// Admin menu — shown after a correct PIN on [AdminPinGatePage]. Ported
-/// from the Android app's post-login admin menu: Cancel / Override /
-/// Change Password / Change Sms template / Change Dropoff Pin.
+/// from the Android app's post-login admin menu: Cancel / Locker
+/// Management / Change Password / Change Sms template / Change Dropoff
+/// Pin.
 class AdminMenuPage extends StatefulWidget {
   const AdminMenuPage({super.key});
 
@@ -62,7 +63,7 @@ class _AdminMenuPageState extends State<AdminMenuPage>
                       label: 'Locker Management',
                       width: 220,
                       height: 78,
-                      onPressed: () => _push(const AdminOverridePage()),
+                      onPressed: () => _push(const LockerManagementPage()),
                     ),
                     KioskButton(
                       label: 'Change\nPassword',

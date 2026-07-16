@@ -102,7 +102,7 @@ class MockKioskRepository extends ChangeNotifier {
   /// The subset of `_pairPartnerByLockerId`'s keys that are collection-side
   /// doors — i.e. NOT valid drop-off targets. Used to filter the
   /// customer-facing drop-off picker (see [getDropoffCandidateLockers]) and
-  /// to label Admin Override rows. Only populated in paired mode.
+  /// to label Locker Management rows. Only populated in paired mode.
   final Set<int> _collectionRoleLockerIds = {};
 
   /// Board number (1-based — 1 for the first board in
@@ -391,7 +391,7 @@ class MockKioskRepository extends ChangeNotifier {
   // --- Lockers -------------------------------------------------------
 
   /// Every physical locker door, drop-off *and* collection sides alike —
-  /// what Admin Override's table is built from (see [getAdminDoorRows]).
+  /// what Locker Management's table is built from (see [getAdminDoorRows]).
   /// For picking a locker to drop a parcel into, use
   /// [getDropoffCandidateLockers]/[getFreeLockers] instead, which exclude
   /// collection-side doors in paired mode.
@@ -447,7 +447,7 @@ class MockKioskRepository extends ChangeNotifier {
   /// A locker counts as occupied if it's either side of an active paired
   /// parcel — checking both `lockerId` and `collectionLockerId` is what
   /// makes both physical doors of a pair show "Occupied" together in
-  /// Admin Override, even though only one of them was ever actually
+  /// Locker Management, even though only one of them was ever actually
   /// opened for the drop-off.
   bool isLockerFree(int lockerId) {
     return !_items.any((item) =>
@@ -537,10 +537,10 @@ class MockKioskRepository extends ChangeNotifier {
   // --- Admin override (open/clear compartments) -----------------------
 
   /// Physically opens exactly the given locker door, without touching any
-  /// item record — mirrors Admin Override's "Open" action, which is
+  /// item record — mirrors Locker Management's "Open" action, which is
   /// distinct from "Clear" (see [clearLocker]): "Open" just unlocks the
   /// door, "Clear" additionally removes the parcel record. [lockerId] is
-  /// always a real, specific physical door id here (each Admin Override
+  /// always a real, specific physical door id here (each Locker Management
   /// row now maps 1:1 to one [Locker] — see [getAdminDoorRows]), so there's
   /// no "which side" ambiguity to resolve.
   void openLockerOnly(int lockerId) {
@@ -548,7 +548,7 @@ class MockKioskRepository extends ChangeNotifier {
   }
 
   /// Force-clears a locker's contents without a customer PIN — mirrors
-  /// Admin Override's "Clear" action. [lockerId] may be *either* side of a
+  /// Locker Management's "Clear" action. [lockerId] may be *either* side of a
   /// paired parcel (the row the admin happened to check) — this looks up
   /// the matching item by checking both `lockerId` and `collectionLockerId`
   /// so clearing works the same regardless of which row was selected, and
@@ -592,7 +592,7 @@ class MockKioskRepository extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Rows for the Admin Override table (see `AdminOverridePage`) — exactly
+  /// Rows for the Locker Management table (see `LockerManagementPage`) — exactly
   /// one row per physical [Locker] in [_lockers]. Outside paired mode this
   /// is unchanged from before pairing existed. In paired mode, a
   /// collection-side door's row is labeled with which drop-off door it's
@@ -610,7 +610,7 @@ class MockKioskRepository extends ChangeNotifier {
     ];
   }
 
-  /// Row label for the Admin Override / locker management table — plain
+  /// Row label for the Locker Management / locker management table — plain
   /// locker id, plus which paired locker id it's linked to (no board
   /// info here, unlike [lockerDisplayLabel]'s customer-facing wording —
   /// an admin managing lockers wants the raw ids that match `db.json`,
@@ -637,7 +637,7 @@ class MockKioskRepository extends ChangeNotifier {
   /// looking for a door that doesn't say "7" anywhere; this returns
   /// "Board 2, Locker 3" instead, matching the confirmed requirement that
   /// on-screen locker numbers match what's actually printed on the door.
-  /// The Admin Override table intentionally does *not* use this — see
+  /// The Locker Management table intentionally does *not* use this — see
   /// [_doorLabel] — since an admin managing lockers wants the plain ids.
   String lockerDisplayLabel(int lockerId) {
     final info = _boardInfoByLockerId[lockerId];
