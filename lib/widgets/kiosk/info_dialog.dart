@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
@@ -11,16 +13,29 @@ import '../../core/theme/app_text_styles.dart';
 ///
 /// Call [show] instead of `showDialog` directly so every call site gets the
 /// same look for free.
-class InfoDialog extends StatelessWidget {
-  const InfoDialog({super.key, required this.message, this.onClose});
+class InfoDialog extends StatefulWidget {
+  const InfoDialog({
+    super.key,
+    required this.message,
+    this.onClose,
+    this.autoCloseDuration,
+  });
 
   final String message;
   final VoidCallback? onClose;
+
+  /// When set, the dialog dismisses itself after this long even if the
+  /// "X" is never tapped — e.g. the admin PIN-change confirmation on
+  /// `AdminResetPage`, which otherwise sits open until someone notices
+  /// and taps it. `null` (the default) keeps every other call site's
+  /// existing "stays open until manually closed" behavior.
+  final Duration? autoCloseDuration;
 
   static Future<void> show(
     BuildContext context, {
     required String message,
     VoidCallback? onClose,
+    Duration? autoCloseDuration,
   }) {
     return showDialog(
       context: context,
@@ -28,8 +43,37 @@ class InfoDialog extends StatelessWidget {
       builder: (context) => InfoDialog(
         message: message,
         onClose: onClose,
+        autoCloseDuration: autoCloseDuration,
       ),
     );
+  }
+
+  @override
+  State<InfoDialog> createState() => _InfoDialogState();
+}
+
+class _InfoDialogState extends State<InfoDialog> {
+  Timer? _autoCloseTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    final duration = widget.autoCloseDuration;
+    if (duration != null) {
+      _autoCloseTimer = Timer(duration, _close);
+    }
+  }
+
+  @override
+  void dispose() {
+    _autoCloseTimer?.cancel();
+    super.dispose();
+  }
+
+  void _close() {
+    if (!mounted) return;
+    Navigator.of(context, rootNavigator: false).pop();
+    widget.onClose?.call();
   }
 
   @override
@@ -55,7 +99,7 @@ class InfoDialog extends StatelessWidget {
                   ),
                   alignment: Alignment.center,
                   child: Text(
-                    message,
+                    widget.message,
                     textAlign: TextAlign.center,
                     style: AppTextStyles.panelText,
                   ),
@@ -69,10 +113,7 @@ class InfoDialog extends StatelessWidget {
                 color: Colors.transparent,
                 child: InkWell(
                   customBorder: const CircleBorder(),
-                  onTap: () {
-                    Navigator.of(context, rootNavigator: false).pop();
-                    onClose?.call();
-                  },
+                  onTap: _close,
                   child: Container(
                     width: 44,
                     height: 44,

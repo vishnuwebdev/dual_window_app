@@ -7,6 +7,7 @@ import '../../core/grpc/locker_grpc_service.dart';
 import '../../core/mock/mock_kiosk_repository.dart';
 import '../../core/mock/models.dart';
 import '../../core/registration/audit_codes.dart';
+import '../../widgets/kiosk/inactivity_timer.dart';
 import 'configuration_page.dart';
 
 /// Ported from `AdminOverrideActivity` / `activity_admin_override.xml`: the
@@ -41,7 +42,8 @@ class LockerManagementPage extends StatefulWidget {
   State<LockerManagementPage> createState() => _LockerManagementPageState();
 }
 
-class _LockerManagementPageState extends State<LockerManagementPage> {
+class _LockerManagementPageState extends State<LockerManagementPage>
+    with InactivityTimerMixin {
   final _repo = MockKioskRepository.instance;
   final Set<int> _selectedLockerIds = {};
 
@@ -49,7 +51,14 @@ class _LockerManagementPageState extends State<LockerManagementPage> {
   void initState() {
     super.initState();
     _repo.addListener(_onRepoChanged);
+    // Same 30s idle-timeout pattern as every other admin screen (see
+    // `InactivityTimerMixin`) — this screen was missing it, so it used to
+    // stay open indefinitely with no one watching it.
+    startInactivityTimer();
   }
+
+  @override
+  void onInactivityTimeout() => Navigator.of(context).pop();
 
   @override
   void dispose() {
@@ -149,10 +158,14 @@ class _LockerManagementPageState extends State<LockerManagementPage> {
     _showMessage('Selected locker(s) cleared.');
   }
 
+  /// "Open All" only unlocks every door — it does not clear any parcel
+  /// record, so an occupied locker is still shown as "Occupied" (and its
+  /// entry stays in db.json) after this runs. Use the per-row/bulk
+  /// "Clear" action instead when the intent is to also free lockers up.
   void _handleOpenAll() {
-    _repo.clearAllLockers();
+    _repo.openAllLockers();
     setState(() => _selectedLockerIds.clear());
-    _showMessage('All lockers opened and cleared.');
+    _showMessage('All lockers opened.');
   }
 
   void _showMessage(String message) {
@@ -163,7 +176,7 @@ class _LockerManagementPageState extends State<LockerManagementPage> {
   Widget build(BuildContext context) {
     final rows = _repo.getAdminDoorRows();
 
-    return Scaffold(
+    return wrapWithActivityDetector(Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
         child: Padding(
@@ -182,9 +195,13 @@ class _LockerManagementPageState extends State<LockerManagementPage> {
                   IconButton(
                     icon: const Icon(Icons.settings, color: Colors.black54),
                     tooltip: 'Configuration',
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const ConfigurationPage()),
-                    ),
+                    onPressed: () {
+                      stopInactivityTimer();
+                      Navigator.of(context)
+                          .push(MaterialPageRoute(
+                              builder: (_) => const ConfigurationPage()))
+                          .then((_) => startInactivityTimer());
+                    },
                   ),
                 ],
               ),
@@ -223,7 +240,7 @@ class _LockerManagementPageState extends State<LockerManagementPage> {
           ),
         ),
       ),
-    );
+    ));
   }
 }
 

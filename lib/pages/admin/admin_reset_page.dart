@@ -76,6 +76,12 @@ class _AdminResetPageState extends State<AdminResetPage>
     InfoDialog.show(
       context,
       message: 'YOUR ADMIN PIN HAS BEEN SUCCESSFULLY RESET',
+      // Previously this sat open until someone noticed and tapped the
+      // "X" — on a kiosk with no one watching that could mean it never
+      // closes. Auto-dismiss after a few seconds so the flow moves on by
+      // itself either way; `onClose` (popping back to the admin menu)
+      // still runs the same whether it was tapped or timed out.
+      autoCloseDuration: const Duration(seconds: 4),
       onClose: () => Navigator.of(context).pop(),
     );
   }

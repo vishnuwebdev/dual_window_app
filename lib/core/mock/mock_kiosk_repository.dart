@@ -592,6 +592,20 @@ class MockKioskRepository extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Physically unlocks every locker door without touching any parcel
+  /// record — mirrors Locker Management's "Open All" button. Unlike
+  /// [clearAllLockers], this never wipes `_items`/db.json: a locker that
+  /// was occupied before this call is still occupied (and still shows
+  /// "Occupied" in the Locker Management table) after it, exactly like
+  /// [openLockerOnly] does for a single door. Use [clearLocker]/
+  /// [clearAllLockers] instead when the intent is to also free the
+  /// locker(s) up.
+  void openAllLockers() {
+    for (final locker in _lockers) {
+      _unlockPhysicalLocker(locker.id);
+    }
+  }
+
   /// Rows for the Locker Management table (see `LockerManagementPage`) — exactly
   /// one row per physical [Locker] in [_lockers]. Outside paired mode this
   /// is unchanged from before pairing existed. In paired mode, a
