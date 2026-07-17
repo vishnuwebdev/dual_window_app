@@ -364,14 +364,14 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                     // release builds (`flutter build ... --release`),
                     // leaving only "Real hardware" selectable. Debug runs
                     // (`flutter run`) keep both segments, unchanged.
-                    segments: [
+                    segments: const [
                       if (!kReleaseMode)
-                        const ButtonSegment(
+                        ButtonSegment(
                           value: 'mock',
                           label: Text('Mock'),
                           icon: Icon(Icons.developer_mode),
                         ),
-                      const ButtonSegment(
+                      ButtonSegment(
                         value: 'grpc',
                         label: Text('Real hardware'),
                         icon: Icon(Icons.lock_outline),
@@ -599,36 +599,37 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
               ),
             ),
             if (_pairedMode) ...[
-              // const SizedBox(height: 16),
-              // AdminSectionCard(
-              //   child: Column(
-              //     crossAxisAlignment: CrossAxisAlignment.stretch,
-              //     children: [
-              //       const Text('Board layout (optional)', style: AdminTextStyles.sectionTitle),
-              //       const SizedBox(height: 6),
-              //       const Text(
-              //         'Only affects the wording shown to customers/admins '
-              //         '— e.g. "Board 2, Locker 3" instead of a raw number '
-              //         '— so it matches what\'s printed on the physical '
-              //         'door. Doesn\'t affect pairing at all. How many '
-              //         'lockers belong to each board, in the same order as '
-              //         'the locker mapping above (comma-separated). Leave '
-              //         'blank to just show plain numbers.',
-              //         style: AdminTextStyles.body,
-              //       ),
-              //       const SizedBox(height: 10),
-              //       KeyboardTextField(
-              //         controller: _boardCountsController,
-              //         style: AdminTextStyles.fieldInput,
-              //         decoration: AdminInputStyle.fieldDecoration(
-              //           hint: '4,4,4,4',
-              //           errorText: _boardCountsError,
-              //         ),
-              //         onSubmitted: (_) => _save(),
-              //       ),
-              //     ],
-              //   ),
-              // ),
+              const SizedBox(height: 16),
+              AdminSectionCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text('Board layout (optional)',
+                        style: AdminTextStyles.sectionTitle),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Only affects the wording shown to customers/admins '
+                      '— e.g. "Board 2, Locker 3" instead of a raw number '
+                      '— so it matches what\'s printed on the physical '
+                      'door. Doesn\'t affect pairing at all. How many '
+                      'lockers belong to each board, in the same order as '
+                      'the locker mapping above (comma-separated). Leave '
+                      'blank to just show plain numbers.',
+                      style: AdminTextStyles.body,
+                    ),
+                    const SizedBox(height: 10),
+                    KeyboardTextField(
+                      controller: _boardCountsController,
+                      style: AdminTextStyles.fieldInput,
+                      decoration: AdminInputStyle.fieldDecoration(
+                        hint: '4,4,4,4',
+                        errorText: _boardCountsError,
+                      ),
+                      onSubmitted: (_) => _save(),
+                    ),
+                  ],
+                ),
+              ),
               const SizedBox(height: 16),
               AdminSectionCard(
                 child: Column(
