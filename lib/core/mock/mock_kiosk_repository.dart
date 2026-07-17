@@ -148,11 +148,18 @@ class MockKioskRepository extends ChangeNotifier {
     logger.i(
         'MockKioskRepository initialized (${_items.length} item(s) loaded from db.json)');
 
-    // Best-effort, fire-and-forget: don't block app startup on a network
-    // call to hardware that might not be powered on yet. If it fails, the
-    // Configuration page's "Sync Lockers from Hardware" button covers
-    // retrying later.
-    unawaited(syncLockersFromHardware());
+    // Deliberately NOT calling `syncLockersFromHardware()` here. It used
+    // to run automatically on every app start/relaunch, which could
+    // silently overwrite an admin's saved locker mapping — and with it,
+    // any pairing built on top of that mapping (see
+    // `ConfigService.reconcileLockerMappingToHardwareCount`, which isn't
+    // aware of `_lockerPairMappings` and doesn't re-validate/prune them)
+    // — the moment the app restarted, even if the on-disk config was
+    // exactly what the admin wanted. Fetching the locker count from
+    // hardware is now purely opt-in, via the Configuration page's "Sync
+    // Lockers from Hardware" button (see `_syncLockersFromHardware` in
+    // `configuration_page.dart`), so a relaunch never touches the saved
+    // configuration on its own.
   }
 
   /// Asks the real unit how many lockers it has (`get_locker_states`) and

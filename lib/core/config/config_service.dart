@@ -69,8 +69,10 @@ class LockerPairMapping {
   /// collected.
   final int collectionLockerId;
 
-  Map<String, dynamic> toJson() =>
-      {'dropoffLockerId': dropoffLockerId, 'collectionLockerId': collectionLockerId};
+  Map<String, dynamic> toJson() => {
+        'dropoffLockerId': dropoffLockerId,
+        'collectionLockerId': collectionLockerId
+      };
 
   static LockerPairMapping? tryFromJson(dynamic raw) {
     if (raw is! Map) return null;
@@ -136,7 +138,7 @@ class ConfigService extends ChangeNotifier {
   /// `/cv/config/config.json` and `libcvmain_rs.so`), not an arbitrary
   /// placeholder. Set the real unit's address via the Configuration page
   /// (or directly in config.json) — see `_kLockerAddress`.
-  static const String _defaultLockerAddress = '192.168.1.100:7777';
+  static const String _defaultLockerAddress = '127.0.0.1:7777';
 
   /// `'mock'` — the in-memory/db.json-backed `MockKioskRepository` behavior
   /// used for UI dev and demos. `'grpc'` — real `unlock_locker` calls are
@@ -257,12 +259,15 @@ class ConfigService extends ChangeNotifier {
     try {
       final file = _configFile;
       if (await file.exists()) {
-        final json = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+        final json =
+            jsonDecode(await file.readAsString()) as Map<String, dynamic>;
         _adminPin = json[_kAdminPin] as String? ?? _defaultAdminPin;
         _dropOffPin = json[_kDropOffPin] as String? ?? _defaultDropOffPin;
         _smsTemplate = json[_kSmsTemplate] as String? ?? _defaultSmsTemplate;
-        _lockerAddress = json[_kLockerAddress] as String? ?? _defaultLockerAddress;
-        _cvmainConfigDir = json[_kCvmainConfigDir] as String? ?? _defaultCvmainConfigDir;
+        _lockerAddress =
+            json[_kLockerAddress] as String? ?? _defaultLockerAddress;
+        _cvmainConfigDir =
+            json[_kCvmainConfigDir] as String? ?? _defaultCvmainConfigDir;
 
         var needsRewrite = json.length != 11 ||
             !json.containsKey(_kAdminPin) ||
@@ -295,7 +300,8 @@ class ConfigService extends ChangeNotifier {
           if (rawPairMappings.isEmpty) {
             _lockerPairMappings = _defaultLockerPairMappings;
           } else {
-            final parsedPairs = rawPairMappings.map(LockerPairMapping.tryFromJson).toList();
+            final parsedPairs =
+                rawPairMappings.map(LockerPairMapping.tryFromJson).toList();
             if (parsedPairs.every((e) => e != null)) {
               _lockerPairMappings = parsedPairs.cast<LockerPairMapping>();
             } else {
@@ -327,7 +333,8 @@ class ConfigService extends ChangeNotifier {
 
         final rawMapping = json[_kLockerMapping];
         if (rawMapping is List) {
-          final parsed = rawMapping.map(LockerMappingEntry.tryFromJson).toList();
+          final parsed =
+              rawMapping.map(LockerMappingEntry.tryFromJson).toList();
           if (parsed.isNotEmpty && parsed.every((e) => e != null)) {
             _lockerMapping = parsed.cast<LockerMappingEntry>();
           } else {
@@ -498,7 +505,8 @@ class ConfigService extends ChangeNotifier {
         return 'Locker ${pair.dropoffLockerId} does not exist (only '
             '$totalLockers locker(s) configured).';
       }
-      if (pair.collectionLockerId < 1 || pair.collectionLockerId > totalLockers) {
+      if (pair.collectionLockerId < 1 ||
+          pair.collectionLockerId > totalLockers) {
         return 'Locker ${pair.collectionLockerId} does not exist (only '
             '$totalLockers locker(s) configured).';
       }
@@ -553,7 +561,8 @@ class ConfigService extends ChangeNotifier {
   /// `MockKioskRepository` syncs its locker list from. In paired mode this
   /// is every physical door on every board (see [validateLockerMapping]'s
   /// doc comment), not just the drop-off side.
-  List<LockerMappingEntry> get lockerMapping => List.unmodifiable(_lockerMapping);
+  List<LockerMappingEntry> get lockerMapping =>
+      List.unmodifiable(_lockerMapping);
 
   /// The same data as [lockerMapping], flattened to the editable
   /// comma-separated shorthand (`"small,small,medium,..."`) for display in
@@ -606,7 +615,8 @@ class ConfigService extends ChangeNotifier {
   /// requirement that drop-off only opens up once pairing is fully done.
   bool get isLockerPairingComplete {
     if (!_pairedLockerMode) return true;
-    return validateLockerPairMappings(_lockerPairMappings, _lockerMapping.length) ==
+    return validateLockerPairMappings(
+            _lockerPairMappings, _lockerMapping.length) ==
         null;
   }
 
@@ -643,7 +653,8 @@ class ConfigService extends ChangeNotifier {
     if (error != null) return error;
     _lockerPairMappings = List.unmodifiable(pairs);
     await _persistConfig();
-    logger.i('Locker pair mappings updated: ${_lockerPairMappings.length} pair(s).');
+    logger.i(
+        'Locker pair mappings updated: ${_lockerPairMappings.length} pair(s).');
     return null;
   }
 
@@ -701,7 +712,8 @@ class ConfigService extends ChangeNotifier {
     // risk `MockKioskRepository` acting on a stale pairing.
     final maxId = _lockerMapping.length;
     final validPairs = _lockerPairMappings
-        .where((p) => p.dropoffLockerId <= maxId && p.collectionLockerId <= maxId)
+        .where(
+            (p) => p.dropoffLockerId <= maxId && p.collectionLockerId <= maxId)
         .toList();
     if (validPairs.length != _lockerPairMappings.length) {
       logger.i(
@@ -785,7 +797,8 @@ class ConfigService extends ChangeNotifier {
 
     final unchanged = reconciled.length == _lockerMapping.length &&
         List.generate(reconciled.length,
-            (i) => reconciled[i].size == _lockerMapping[i].size).every((e) => e);
+                (i) => reconciled[i].size == _lockerMapping[i].size)
+            .every((e) => e);
     if (unchanged) return;
 
     _lockerMapping = reconciled;
