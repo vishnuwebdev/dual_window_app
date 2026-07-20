@@ -203,6 +203,11 @@ class ConfigService extends ChangeNotifier {
 
   StreamSubscription<FileSystemEvent>? _watchSubscription;
 
+  /// How long to wait for the filesystem to go quiet before actually
+  /// reloading `config.json` off a watch event — see [_startWatching].
+  static const _reloadDebounce = Duration(seconds: 2, milliseconds: 500);
+  Timer? _reloadDebounceTimer;
+
   ConfigService._internal();
 
   factory ConfigService() {
@@ -232,10 +237,28 @@ class ConfigService extends ChangeNotifier {
   /// in-memory state here isn't automatically shared between them — this
   /// is what makes a setting changed in one window show up in the other
   /// shortly after, instead of only on next app restart.
+  ///
+  /// Debounced (see [_reloadDebounce]) rather than reloading on every raw
+  /// event: every setter's own [_persistConfig] write lands back on this
+  /// same watch (a "self-echo"), and on Linux a single `writeAsString` can
+  /// itself surface as more than one filesystem event. Without debouncing,
+  /// a single Save with several fields changing (e.g. `ConfigurationPage`
+  /// saving the mapping, board counts, and pairing back to back) could
+  /// trigger a handful of redundant reloads — each one re-running every
+  /// listener's own work (`MockKioskRepository` rebuilding its whole
+  /// locker/pairing state, `LockerGrpcService` checking whether to
+  /// reconnect) for data that hasn't actually changed again since the
+  /// previous reload. Collapsing a burst of events into one reload after
+  /// the file goes quiet keeps that work to once per real change, which
+  /// matters more on slower storage (e.g. an SD card) than it would on a
+  /// dev machine's SSD.
   void _startWatching() {
     try {
-      _watchSubscription =
-          _configFile.watch().listen((_) => _reloadFromDiskAndNotify());
+      _watchSubscription = _configFile.watch().listen((_) {
+        _reloadDebounceTimer?.cancel();
+        _reloadDebounceTimer =
+            Timer(_reloadDebounce, _reloadFromDiskAndNotify);
+      });
     } catch (e) {
       logger.w('Could not watch config.json for external changes: $e');
     }
@@ -248,6 +271,7 @@ class ConfigService extends ChangeNotifier {
 
   @override
   void dispose() {
+    _reloadDebounceTimer?.cancel();
     _watchSubscription?.cancel();
     super.dispose();
   }
