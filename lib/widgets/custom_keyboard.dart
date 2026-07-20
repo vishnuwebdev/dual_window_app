@@ -181,32 +181,59 @@ class _CustomKeyboardState extends State<CustomKeyboard> {
 }
 
 /// A single character key.
-class _Key extends StatelessWidget {
+///
+/// Plain `GestureDetector` + a manually-tracked pressed flag, instead of
+/// `Material`/`InkWell`'s ripple: that ripple is a `Ticker`-driven
+/// animation (an expanding, fading circle repainted every frame for
+/// ~200-400ms per tap), and with up to 30 keys on screen a fast typist can
+/// have several running and repainting at once — real GPU cost, on the
+/// same weak Raspberry Pi GPU already carrying two full window engines,
+/// for a purely cosmetic effect. An instant color swap on press/release
+/// gives the same "the key registered" feedback with no animation at all.
+/// `GestureDetector` also never requests focus, so there's no need for
+/// the `canRequestFocus: false` workaround `InkWell` required to stop a
+/// key tap from stealing focus from the field being typed into.
+class _Key extends StatefulWidget {
   const _Key({required this.label, required this.onTap});
 
   final String label;
   final VoidCallback onTap;
 
   @override
+  State<_Key> createState() => _KeyState();
+}
+
+class _KeyState extends State<_Key> {
+  bool _pressed = false;
+
+  void _setPressed(bool value) {
+    if (_pressed == value) return;
+    setState(() => _pressed = value);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final base = Theme.of(context).colorScheme.surface;
+    final bg = _pressed ? Color.alphaBlend(Colors.black12, base) : base;
+
     return Padding(
       padding: const EdgeInsets.all(2),
       child: SizedBox(
         height: 46,
-        child: Material(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(6),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(6),
-            // Without this, tapping a key steals focus from the text
-            // field it's supposed to be typing into: Material buttons are
-            // focusable by default, so the tap-down would unfocus the
-            // field (hiding the keyboard mid-gesture, via
-            // VirtualKeyboardController) before onTap even fires.
-            canRequestFocus: false,
-            onTap: onTap,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (_) => _setPressed(true),
+          onTapCancel: () => _setPressed(false),
+          onTapUp: (_) => _setPressed(false),
+          onTap: widget.onTap,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: BorderRadius.circular(6),
+            ),
             child: Center(
-                child: Text(label, style: const TextStyle(fontSize: 16))),
+                child:
+                    Text(widget.label, style: const TextStyle(fontSize: 16))),
           ),
         ),
       ),
@@ -215,7 +242,10 @@ class _Key extends StatelessWidget {
 }
 
 /// A wider control key: shift, backspace, space, 123/ABC toggle, or Done.
-class _ControlKey extends StatelessWidget {
+///
+/// See `_Key`'s doc comment for why this is a plain `GestureDetector` +
+/// manual pressed state instead of `Material`/`InkWell`'s animated ripple.
+class _ControlKey extends StatefulWidget {
   const _ControlKey({
     this.label,
     this.icon,
@@ -231,30 +261,47 @@ class _ControlKey extends StatelessWidget {
   final bool filled;
 
   @override
+  State<_ControlKey> createState() => _ControlKeyState();
+}
+
+class _ControlKeyState extends State<_ControlKey> {
+  bool _pressed = false;
+
+  void _setPressed(bool value) {
+    if (_pressed == value) return;
+    setState(() => _pressed = value);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final bg = filled
+    final base = widget.filled
         ? scheme.primary
-        : selected
+        : widget.selected
             ? scheme.primaryContainer
             : scheme.surface;
-    final fg = filled ? scheme.onPrimary : scheme.onSurface;
+    final bg = _pressed ? Color.alphaBlend(Colors.black12, base) : base;
+    final fg = widget.filled ? scheme.onPrimary : scheme.onSurface;
 
     return Padding(
       padding: const EdgeInsets.all(2),
       child: SizedBox(
         height: 46,
-        child: Material(
-          color: bg,
-          borderRadius: BorderRadius.circular(6),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(6),
-            canRequestFocus: false, // see the same note in _Key above
-            onTap: onTap,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (_) => _setPressed(true),
+          onTapCancel: () => _setPressed(false),
+          onTapUp: (_) => _setPressed(false),
+          onTap: widget.onTap,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: BorderRadius.circular(6),
+            ),
             child: Center(
-              child: icon != null
-                  ? Icon(icon, size: 20, color: fg)
-                  : Text(label ?? '',
+              child: widget.icon != null
+                  ? Icon(widget.icon, size: 20, color: fg)
+                  : Text(widget.label ?? '',
                       style: TextStyle(fontSize: 14, color: fg)),
             ),
           ),
