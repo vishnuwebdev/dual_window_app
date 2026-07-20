@@ -47,6 +47,7 @@ class _UnitRegistrationPageState extends State<UnitRegistrationPage> {
   bool _resultIsError = false;
   bool _refreshingJwt = false;
   bool _mirroring = false;
+  bool _resetting = false;
   String? _syncSavedMessage;
 
   @override
@@ -138,6 +139,51 @@ class _UnitRegistrationPageState extends State<UnitRegistrationPage> {
       _mirroring = false;
       _syncSavedMessage = result ??
           'cvmain config directory is blank above — nothing to mirror.';
+    });
+  }
+
+  /// Confirms before doing anything — unlike "Mirror now"/"Forget", this
+  /// overwrites the physical unit's real `auth.json`/`mq.json` with the
+  /// "-reset" template files, which can't be undone from this app.
+  Future<void> _resetToFactoryDefaults() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.adminCard,
+        title: const Text(
+          'Reset unit registration?',
+          style: TextStyle(fontFamily: 'Metropolis', fontWeight: FontWeight.w700, color: Colors.white),
+        ),
+        content: const Text(
+          'This clears this app\'s local registration and overwrites the '
+          'physical unit\'s auth.json and mq/mq.json with its factory '
+          '"-reset" template files, in the cvmain config directory below. '
+          'cvmain will still need a manual restart to pick it up. This '
+          'cannot be undone from here.',
+          style: TextStyle(fontFamily: 'Metropolis', color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.redAccent[100]),
+            child: const Text('Reset'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _resetting = true);
+    final result = await _service.resetToFactoryDefaults();
+    if (!mounted) return;
+    setState(() {
+      _resetting = false;
+      _resultIsError = false;
+      _resultMessage = result;
     });
   }
 
@@ -374,6 +420,45 @@ class _UnitRegistrationPageState extends State<UnitRegistrationPage> {
                       style: const TextStyle(fontFamily: 'Metropolis', color: Colors.white70),
                     ),
                   ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            AdminSectionCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text('Factory reset', style: AdminTextStyles.sectionTitle),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Clears this app\'s local registration, and overwrites '
+                    'the physical unit\'s real auth.json and mq/mq.json '
+                    '(in the cvmain config directory above) with its '
+                    'factory "auth.json-reset"/"mq.json-reset" template '
+                    'files. Use this to fully unregister the unit before '
+                    're-registering it, or handing it off. cvmain still '
+                    'needs a manual restart afterwards to pick this up.',
+                    style: AdminTextStyles.body,
+                  ),
+                  const SizedBox(height: 14),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.redAccent[100],
+                      side: BorderSide(color: Colors.redAccent[100]!),
+                      textStyle: const TextStyle(fontFamily: 'Metropolis', fontWeight: FontWeight.w600),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: _resetting ? null : _resetToFactoryDefaults,
+                    icon: _resetting
+                        ? SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.redAccent[100]),
+                          )
+                        : const Icon(Icons.restart_alt),
+                    label: const Text('Reset to factory defaults'),
+                  ),
                 ],
               ),
             ),

@@ -48,6 +48,11 @@ flutter:
   assets:
     - assets/images/
     - assets/icons/
+    # Bundled so the app can read its own `version:` field at runtime (see
+    # core/utilities/app_version.dart) instead of a hardcoded literal that
+    # silently drifts out of sync — see `LockerManagementPage`, which was
+    # showing "Version 0.1.0" long after this file had moved on to 1.0.0+1.
+    - pubspec.yaml
 
   fonts:
     - family: Metropolis

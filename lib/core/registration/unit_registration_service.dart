@@ -250,4 +250,68 @@ class UnitRegistrationService extends ChangeNotifier {
     logger.i('Unit registration forgotten locally.');
     notifyListeners();
   }
+
+  /// Resets both this app's local registration state *and* the physical
+  /// unit's real `auth.json`/`mq.json` back to their factory-shipped
+  /// defaults, using the `auth.json-reset`/`mq.json-reset` template files
+  /// that already sit alongside the live ones in
+  /// `ConfigService.cvmainConfigDir` on a real unit (confirmed via SSH:
+  /// `<dir>/auth.json-reset` and `<dir>/mq/mq.json-reset`).
+  ///
+  /// Unlike [forget] (which only clears this app's own local copies — see
+  /// its doc comment), this also overwrites the *physical unit's* actual
+  /// `auth.json` and `mq/mq.json` with those reset templates, so cvmain
+  /// itself reverts to an unregistered identity next time it restarts —
+  /// not just this app. The local half always runs; the physical-unit
+  /// half is skipped (with an explanatory message, same pattern as
+  /// [mirrorToCvmainConfig]) if [ConfigService.cvmainConfigDir] is blank,
+  /// or if either "-reset" template file isn't actually present there.
+  ///
+  /// Like [mirrorToCvmainConfig], this only writes files — it does **not**
+  /// restart cvmain, which still needs a manual restart
+  /// (`sudo pkill -f cvmain_rs` over SSH) to actually pick up the reset
+  /// files.
+  Future<String?> resetToFactoryDefaults() async {
+    // Always clear this app's own local state first, regardless of
+    // whether a cvmain directory is configured below — "Reset" should
+    // never leave this app thinking it's still registered.
+    await forget();
+
+    final dir = ConfigService().cvmainConfigDir;
+    if (dir.isEmpty) {
+      return 'Local registration cleared. No cvmain config directory is '
+          'set below, so the physical unit\'s auth.json/mq.json were left '
+          'untouched.';
+    }
+
+    try {
+      final authReset = File('$dir/auth.json-reset');
+      final mqReset = File('$dir/mq/mq.json-reset');
+
+      if (!await authReset.exists() || !await mqReset.exists()) {
+        return 'Local registration cleared, but couldn\'t find '
+            'auth.json-reset/mq.json-reset in "$dir" — the physical '
+            'unit\'s files were left untouched.';
+      }
+
+      final destAuth = File('$dir/auth.json');
+      await destAuth.parent.create(recursive: true);
+      await destAuth.writeAsString(await authReset.readAsString());
+
+      // Same `mq/` subdirectory layout as `mirrorToCvmainConfig`.
+      final destMq = File('$dir/mq/mq.json');
+      await destMq.parent.create(recursive: true);
+      await destMq.writeAsString(await mqReset.readAsString());
+
+      logger.i('Reset auth.json/mq.json to factory defaults in cvmain config dir: $dir');
+      return 'Local registration cleared, and the unit\'s auth.json/mq.json '
+          'were reset to their factory defaults in $dir. cvmain still '
+          'needs a manual restart to pick this up (sudo pkill -f '
+          'cvmain_rs over SSH).';
+    } catch (e) {
+      logger.w('Failed to reset auth.json/mq.json in $dir: $e');
+      return 'Local registration cleared, but resetting the physical '
+          'unit\'s files in "$dir" failed: $e';
+    }
+  }
 }

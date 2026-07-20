@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../core/mock/mock_kiosk_repository.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
+import '../../core/utilities/app_version.dart';
 import '../../widgets/kiosk/kiosk.dart';
 import '../admin/admin_pin_gate_page.dart';
 import 'collection_input_page.dart';
@@ -55,10 +56,19 @@ class _HomePageState extends State<HomePage> {
   int _badgeTapCount = 0;
   Timer? _badgeTapResetTimer;
 
+  // Starts blank rather than a guessed placeholder — see `AppVersion`,
+  // which reads the real value from `pubspec.yaml` — and fills in once
+  // that (near-instant) asset read completes.
+  String _versionLabel = '';
+
   @override
   void initState() {
     super.initState();
     _repo.addListener(_onRepoChanged);
+    AppVersion.name().then((version) {
+      if (!mounted) return;
+      setState(() => _versionLabel = 'V$version');
+    });
   }
 
   @override
@@ -231,7 +241,7 @@ class _HomePageState extends State<HomePage> {
                           width: 56, height: 56),
                       const SizedBox(height: 4),
                       Text(
-                        'V7.2.1',
+                        _versionLabel,
                         style: AppTextStyles.label.copyWith(
                           fontSize: 12,
                           color: AppColors.white.withOpacity(0.6),

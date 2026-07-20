@@ -7,6 +7,7 @@ import '../../core/grpc/locker_grpc_service.dart';
 import '../../core/mock/mock_kiosk_repository.dart';
 import '../../core/mock/models.dart';
 import '../../core/registration/audit_codes.dart';
+import '../../core/utilities/app_version.dart';
 import '../../widgets/kiosk/inactivity_timer.dart';
 import 'configuration_page.dart';
 
@@ -47,6 +48,11 @@ class _LockerManagementPageState extends State<LockerManagementPage>
   final _repo = MockKioskRepository.instance;
   final Set<int> _selectedLockerIds = {};
 
+  // Starts blank rather than a guessed placeholder — see `AppVersion`, which
+  // reads the real value from `pubspec.yaml` — and fills in once that
+  // (near-instant) asset read completes.
+  String _versionLabel = '';
+
   @override
   void initState() {
     super.initState();
@@ -55,6 +61,10 @@ class _LockerManagementPageState extends State<LockerManagementPage>
     // `InactivityTimerMixin`) — this screen was missing it, so it used to
     // stay open indefinitely with no one watching it.
     startInactivityTimer();
+    AppVersion.name().then((version) {
+      if (!mounted) return;
+      setState(() => _versionLabel = 'Version $version');
+    });
   }
 
   @override
@@ -186,10 +196,10 @@ class _LockerManagementPageState extends State<LockerManagementPage>
             children: [
               Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: Text(
-                      'Version 0.1.0',
-                      style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black87),
+                      _versionLabel,
+                      style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black87),
                     ),
                   ),
                   IconButton(
