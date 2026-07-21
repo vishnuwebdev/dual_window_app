@@ -16,9 +16,14 @@ dependencies:
   grpc: ^5.1.0
   protobuf: ^6.0.0
 
-  # HTTP (VaultGroup cloud: unit registration / JWT sign-in — see
-  # core/registration/unit_registration_service.dart)
+  # HTTP (VaultGroup cloud: unit registration / JWT sign-in, settings/DB
+  # sync — see core/registration/unit_registration_service.dart and
+  # core/registration/settings_sync_service.dart)
   http: ^1.2.0
+
+  # MQTT (VaultGroup cloud push trigger for settings/DB sync — see
+  # core/registration/mqtt_sync_service.dart)
+  mqtt_client: ^10.0.0
 
   # State Management & Architecture
   flutter_bloc: ^8.1.3

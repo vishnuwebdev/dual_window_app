@@ -473,6 +473,40 @@ class MockKioskRepository extends ChangeNotifier {
 
   List<LockerItem> getAllItems() => List.unmodifiable(_items);
 
+  /// The current parcel records, already in `db.json`'s JSON shape — used
+  /// by `SettingsSyncService.pushToServer` to build the `db_entries` field
+  /// it PUTs to the cloud, mirroring Android's `putSettingsToTheServer`
+  /// (which reads `db.json` straight off disk for the same purpose).
+  List<Map<String, dynamic>> itemsAsJson() =>
+      _items.map(_itemToJson).toList();
+
+  /// Replaces every local parcel record with [rawItems] (already-decoded
+  /// JSON in the same shape as `db.json` — see [_itemFromJson]) and
+  /// persists the result to `db.json`. Used by
+  /// `SettingsSyncService.pullFromServer` to mirror Android's
+  /// `readDbFromServer`, which overwrites the local parcel database with
+  /// whatever the cloud last held for this unit. Entries that don't parse
+  /// are silently dropped (same tolerance as [_loadItemsFromDisk]) rather
+  /// than aborting the whole sync over one bad record; any surviving
+  /// record whose locker id no longer exists in the current
+  /// [ConfigService.lockerMapping] is pruned by [_syncLockersFromConfig],
+  /// exactly like a normal `config.json` change would.
+  void replaceItemsFromServer(List<dynamic> rawItems) {
+    final parsed = rawItems.map(_itemFromJson).whereType<LockerItem>().toList();
+    _items
+      ..clear()
+      ..addAll(parsed);
+    _persistItems();
+    logger.i(
+      'MockKioskRepository: replaced local items with ${parsed.length} '
+      'record(s) from cloud (${rawItems.length - parsed.length} unparsable '
+      'entr${rawItems.length - parsed.length == 1 ? 'y' : 'ies'} dropped).',
+    );
+    // Also prunes any item whose locker id fell outside the current
+    // mapping, and notifies listeners — same as every other mutation here.
+    _syncLockersFromConfig();
+  }
+
   /// Normalizes [phone] before comparing — defensive, in case a caller
   /// somewhere forgot to normalize first. Safe to do unconditionally since
   /// [normalizeToSouthAfrica] is idempotent (never adds a second "+27").

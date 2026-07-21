@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'core/config/config_service.dart';
 import 'core/mock/mock_kiosk_repository.dart';
+import 'core/registration/mqtt_sync_service.dart';
 import 'core/registration/unit_registration_service.dart';
 import 'models/window_type.dart';
 import 'services/messaging_service.dart';
@@ -75,6 +76,16 @@ Future<void> _runAdminWindow() async {
   // delay showing the Admin window while the Customer window's own engine
   // spins up in parallel.
   unawaited(WindowService.openOrCreateCustomerWindow());
+
+  // Cloud MQTT push-trigger sync (see MqttSyncService) is owned by the
+  // Admin window's engine only — never the Customer window's — so there's
+  // exactly one broker session per running app, not one per window (each
+  // window is its own Flutter engine/isolate; see the class doc comment on
+  // `MessagingService` for the same "each window is separate" caveat).
+  // Fire-and-forget: a no-op if the unit isn't registered yet (no
+  // mq.json), and every failure inside is caught and logged rather than
+  // thrown past here.
+  unawaited(MqttSyncService.instance.start());
 }
 
 Future<void> _runCustomerWindow() async {
