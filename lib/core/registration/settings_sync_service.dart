@@ -114,7 +114,24 @@ class SettingsSyncService {
   ///    `MockKioskRepository.cloudDbEntriesJson()`, rather than this app's
   ///    richer local shape (which also carries `collectionLockerId` for
   ///    paired-locker mode) — an extra field the dashboard doesn't expect
-  ///    risked it silently dropping the whole record.
+  ///    risked it silently dropping the whole record. `creationDate` itself
+  ///    is also now formatted to match Android's `DateSerializer` exactly
+  ///    (explicit numeric UTC offset) — see that method's doc comment.
+  ///
+  /// STILL UNCONFIRMED — `template` (SMS template) not appearing on the
+  /// dashboard: the wire format here matches Android's `putSettingsToTheServer`
+  /// byte-for-byte (a plain top-level string, same JSON key). Since this
+  /// app has no way to inspect VaultGroup's actual dashboard/schema, two
+  /// explanations remain open and can't be ruled out from here:
+  ///  1. The dashboard's "SMS Template" view may not read the top-level
+  ///     `template` field at all, and instead reads some key *inside* the
+  ///     `config` blob (cvmain's own native config.json) — which would mean
+  ///     the real fix is finding and setting that key there, not here.
+  ///  2. It may simply be a dashboard-side gap (received and stored fine,
+  ///     just not rendered anywhere).
+  /// Worth checking directly against the real `<cvmainConfigDir>/config.json`
+  /// content for an SMS-related key before assuming this needs an app-side
+  /// change.
   Future<SettingsSyncResult> pushToServer() async {
     final jwt = await _readJwt();
     if (jwt == null) {

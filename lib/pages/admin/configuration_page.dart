@@ -60,20 +60,12 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
 
   // --- Paired slave-board mode ------------------------------------------
   //
-  // See `ConfigService.pairedLockerMode`. Off by default. Two independent
-  // pieces sit under this toggle:
-  //
-  // - `_boardCountsController` (optional): purely a *display* aid — see
-  //   `ConfigService.boardLockerCounts`'s doc comment — labels lockers as
-  //   "Board N, Locker L" instead of a raw number. Has no effect on which
-  //   lockers are actually paired.
-  // - `_pendingPairs` (required before drop-off works): the actual
-  //   drop-off/collection locker links, freely chosen below — any two
-  //   not-yet-used lockers can be linked, in any combination. See
-  //   `ConfigService.lockerPairMappings`.
-  late final TextEditingController _boardCountsController;
+  // See `ConfigService.pairedLockerMode`. Off by default. The actual
+  // drop-off/collection locker links, freely chosen below — any two
+  // not-yet-used lockers (identified purely by their position/number in
+  // the locker mapping above, no board grouping involved) can be linked,
+  // in any combination. See `ConfigService.lockerPairMappings`.
   late bool _pairedMode;
-  String? _boardCountsError;
 
   final List<_PendingLockerPair> _pendingPairs = [];
   int? _selectedDropoffId;
@@ -88,8 +80,6 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
     // "small,small,medium,large") — see `ConfigService.lockerMappingText`.
     _lockerMappingController =
         TextEditingController(text: _config.lockerMappingText);
-    _boardCountsController =
-        TextEditingController(text: _config.boardLockerCountsText);
     // The "Mock" segment is only ever rendered in debug builds (see the
     // `SegmentedButton` below) — a *release* build force-coerces to
     // 'grpc' here even if a config.json carried over from debug testing
@@ -117,7 +107,6 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
   void dispose() {
     _addressController.dispose();
     _lockerMappingController.dispose();
-    _boardCountsController.dispose();
     super.dispose();
   }
 
@@ -128,15 +117,13 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
     await _config.setLockerBackend(_backend);
     await _config.setKioskMode(_kioskMode);
 
-    // The flat mapping is always saved first — the board layout and
-    // pairing below are both validated against *this* new total, so it
-    // has to land before either of them.
+    // The flat mapping is always saved first — pairing below is validated
+    // against *this* new total, so it has to land before it.
     final mappingError =
         await _config.setLockerMapping(_lockerMappingController.text.trim());
     if (mappingError != null) {
       setState(() {
         _lockerMappingError = mappingError;
-        _boardCountsError = null;
         _pairingError = null;
         _savedMessage = null;
       });
@@ -146,18 +133,6 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
     await _config.setPairedLockerMode(_pairedMode);
 
     if (_pairedMode) {
-      final boardCountsError = await _config
-          .setBoardLockerCounts(_boardCountsController.text.trim());
-      if (boardCountsError != null) {
-        setState(() {
-          _lockerMappingError = null;
-          _boardCountsError = boardCountsError;
-          _pairingError = null;
-          _savedMessage = null;
-        });
-        return;
-      }
-
       final pairingError = await _config.setLockerPairMappings([
         for (final p in _pendingPairs)
           LockerPairMapping(
@@ -168,7 +143,6 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
       if (pairingError != null) {
         setState(() {
           _lockerMappingError = null;
-          _boardCountsError = null;
           _pairingError = pairingError;
           _savedMessage = null;
         });
@@ -178,7 +152,6 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
 
     setState(() {
       _lockerMappingError = null;
-      _boardCountsError = null;
       _pairingError = null;
       _connectionResult = null;
       _savedMessage = _backend == 'grpc'
@@ -192,7 +165,6 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
     setState(() {
       _addressController.text = _config.lockerAddress;
       _lockerMappingController.text = _config.lockerMappingText;
-      _boardCountsController.text = _config.boardLockerCountsText;
       _backend = (kReleaseMode && _config.lockerBackend == 'mock')
           ? 'grpc'
           : _config.lockerBackend;
@@ -202,7 +174,6 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
       _selectedDropoffId = null;
       _selectedCollectionId = null;
       _lockerMappingError = null;
-      _boardCountsError = null;
       _pairingError = null;
       _connectionResult = null;
       _syncResult = null;
@@ -599,37 +570,6 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
               ),
             ),
             if (_pairedMode) ...[
-              const SizedBox(height: 16),
-              AdminSectionCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text('Board layout (optional)',
-                        style: AdminTextStyles.sectionTitle),
-                    const SizedBox(height: 6),
-                    const Text(
-                      'Only affects the wording shown to customers/admins '
-                      '— e.g. "Board 2, Locker 3" instead of a raw number '
-                      '— so it matches what\'s printed on the physical '
-                      'door. Doesn\'t affect pairing at all. How many '
-                      'lockers belong to each board, in the same order as '
-                      'the locker mapping above (comma-separated). Leave '
-                      'blank to just show plain numbers.',
-                      style: AdminTextStyles.body,
-                    ),
-                    const SizedBox(height: 10),
-                    KeyboardTextField(
-                      controller: _boardCountsController,
-                      style: AdminTextStyles.fieldInput,
-                      decoration: AdminInputStyle.fieldDecoration(
-                        hint: '4,4,4,4',
-                        errorText: _boardCountsError,
-                      ),
-                      onSubmitted: (_) => _save(),
-                    ),
-                  ],
-                ),
-              ),
               const SizedBox(height: 16),
               AdminSectionCard(
                 child: Column(

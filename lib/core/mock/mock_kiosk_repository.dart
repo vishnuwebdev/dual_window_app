@@ -105,19 +105,6 @@ class MockKioskRepository extends ChangeNotifier {
   /// to label Locker Management rows. Only populated in paired mode.
   final Set<int> _collectionRoleLockerIds = {};
 
-  /// Board number (1-based — 1 for the first board in
-  /// `ConfigService.lockerMapping`, i.e. "SB1") and local position
-  /// (1-based, matching what's physically printed on that specific door)
-  /// for every locker id — populated whenever paired mode has valid
-  /// `ConfigService.boardLockerCounts`, regardless of whether that
-  /// particular board's pairing itself succeeded. This is what
-  /// [lockerDisplayLabel] reads from: the flat `Locker.id` is purely an
-  /// internal/gRPC bookkeeping number once there's more than one board,
-  /// not what's printed on the door, so nothing shown to a customer or
-  /// admin should print `Locker.id`/`LockerItem.lockerId` directly — see
-  /// [lockerDisplayLabel].
-  final Map<int, ({int boardNumber, int localPosition})> _boardInfoByLockerId = {};
-
   /// Mirrors `sharedPreferences["isGlobal"]` — switches phone validation
   /// between South-Africa-only and any-country mode.
   bool isGlobal = false;
@@ -292,18 +279,11 @@ class MockKioskRepository extends ChangeNotifier {
     final config = ConfigService();
     _pairPartnerByLockerId.clear();
     _collectionRoleLockerIds.clear();
-    _boardInfoByLockerId.clear();
 
     _lockers = config.lockerMapping
         .map((entry) => Locker(id: entry.id, size: _parseSize(entry.size)))
         .toList();
 
-    if (config.boardLockerCounts.isNotEmpty) {
-      // Board layout is purely a display/labeling concern now — see
-      // `ConfigService.boardLockerCounts`'s doc comment — so this applies
-      // whether or not paired mode itself is on.
-      _applyBoardLayout(config.boardLockerCounts);
-    }
     if (config.pairedLockerMode) {
       _applyExplicitPairMappings(config.lockerPairMappings);
     }
@@ -315,33 +295,6 @@ class MockKioskRepository extends ChangeNotifier {
             !validIds.contains(item.collectionLockerId)));
 
     notifyListeners();
-  }
-
-  /// Chunks the already-built `_lockers` into per-board slices using
-  /// [boardCounts] and records each locker's board number (1-based —
-  /// board 1 is "SB1") and local position (1-based, matching what's
-  /// physically printed on that door) into `_boardInfoByLockerId`. Purely
-  /// a display/labeling pass — entirely independent of
-  /// [_applyExplicitPairMappings], which does the actual pairing from a
-  /// separately admin-chosen mapping, not from board position.
-  void _applyBoardLayout(List<int> boardCounts) {
-    var offset = 0;
-    for (var boardIndex = 0; boardIndex < boardCounts.length; boardIndex++) {
-      final count = boardCounts[boardIndex];
-      if (offset + count > _lockers.length) {
-        logger.w(
-          'MockKioskRepository: board $boardIndex ($count locker(s)) runs '
-          'past the end of the locker mapping (${_lockers.length} total) — '
-          'stopping board layout here.',
-        );
-        return;
-      }
-      for (var i = 0; i < count; i++) {
-        _boardInfoByLockerId[_lockers[offset + i].id] =
-            (boardNumber: boardIndex + 1, localPosition: i + 1);
-      }
-      offset += count;
-    }
   }
 
   /// Populates `_pairPartnerByLockerId` (bidirectional) and
@@ -484,14 +437,44 @@ class MockKioskRepository extends ChangeNotifier {
   /// risked the dashboard's parser rejecting or dropping the whole record,
   /// so this deliberately narrows to the fields VaultGroup already
   /// understands from the Android app.
+  ///
+  /// `creationDate` specifically uses [_androidCompatibleDateString] rather
+  /// than `DateTime.toIso8601String()` — found while chasing why
+  /// `db_entries` wasn't showing up on the VaultGroup dashboard even though
+  /// the request otherwise succeeded: Android's `DateSerializer`
+  /// (`cnc-dnp-android`'s `util/DateSerializer.kt`) formats via
+  /// `SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ")`, which always ends in
+  /// an explicit numeric offset like `+0200`. Dart's `toIso8601String()`
+  /// omits any offset entirely for a non-UTC `DateTime` (no `Z`, no
+  /// `+HHmm`) — if VaultGroup's backend validates/parses this field against
+  /// Android's exact format, that mismatch would fail silently on records
+  /// with a local (non-UTC) creation time, which is every record this app
+  /// ever creates (`DateTime.now()` in [addItem]).
   List<Map<String, dynamic>> cloudDbEntriesJson() => _items
       .map((item) => {
             'phone': item.phone,
             'pin': item.pin,
             'lockerId': item.lockerId,
-            'creationDate': item.creationDate.toIso8601String(),
+            'creationDate': _androidCompatibleDateString(item.creationDate),
           })
       .toList();
+
+  /// Formats [date] to match Android's `DateSerializer` exactly:
+  /// `SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ")`, e.g.
+  /// `"2026-07-22T14:30:00.000+0200"` — see [cloudDbEntriesJson]'s doc
+  /// comment for why this has to match byte-for-byte rather than using
+  /// Dart's own ISO-8601 formatter.
+  static String _androidCompatibleDateString(DateTime date) {
+    String pad(int n, [int width = 2]) => n.toString().padLeft(width, '0');
+    final offset = date.timeZoneOffset;
+    final sign = offset.isNegative ? '-' : '+';
+    final hours = offset.abs().inHours;
+    final minutes = offset.abs().inMinutes.remainder(60);
+    return '${pad(date.year, 4)}-${pad(date.month)}-${pad(date.day)}'
+        'T${pad(date.hour)}:${pad(date.minute)}:${pad(date.second)}'
+        '.${pad(date.millisecond, 3)}'
+        '$sign${pad(hours)}${pad(minutes)}';
+  }
 
   /// Normalizes [phone] before comparing — defensive, in case a caller
   /// somewhere forgot to normalize first. Safe to do unconditionally since
@@ -652,11 +635,9 @@ class MockKioskRepository extends ChangeNotifier {
   }
 
   /// Row label for the Locker Management / locker management table — plain
-  /// locker id, plus which paired locker id it's linked to (no board
-  /// info here, unlike [lockerDisplayLabel]'s customer-facing wording —
-  /// an admin managing lockers wants the raw ids that match `db.json`,
-  /// `config.json`'s pairing, and gRPC's own locker_num, not a
-  /// board-relative position).
+  /// locker id, plus which paired locker id it's linked to. An admin
+  /// managing lockers wants the raw ids that match `db.json`,
+  /// `config.json`'s pairing, and gRPC's own locker_num directly.
   String _doorLabel(int lockerId) {
     final partner = _pairPartnerByLockerId[lockerId];
     if (partner == null) return '$lockerId';
@@ -666,25 +647,17 @@ class MockKioskRepository extends ChangeNotifier {
 
   /// Human-facing label for [lockerId] — what customer-facing drop-off/
   /// collection screens show instead of the raw flat id (see
-  /// `DeliverPlaceParcelPage`/`CollectionCompletePage`). Outside paired
-  /// mode (or for any id with no board info, which shouldn't normally
-  /// happen once paired mode is configured) this is just the flat id
-  /// itself, unchanged from before this feature existed.
+  /// `DeliverPlaceParcelPage`/`CollectionCompletePage`).
   ///
-  /// In paired mode, the flat id is purely an internal/gRPC bookkeeping
-  /// number — `SB2`'s third door might be flat id 7, but the door itself
-  /// is physically labeled "3" (its position on its own board). Printing
-  /// the flat id to a customer ("collect from locker 7") would send them
-  /// looking for a door that doesn't say "7" anywhere; this returns
-  /// "Board 2, Locker 3" instead, matching the confirmed requirement that
-  /// on-screen locker numbers match what's actually printed on the door.
-  /// The Locker Management table intentionally does *not* use this — see
-  /// [_doorLabel] — since an admin managing lockers wants the plain ids.
-  String lockerDisplayLabel(int lockerId) {
-    final info = _boardInfoByLockerId[lockerId];
-    if (info == null) return '$lockerId';
-    return 'Board ${info.boardNumber}, Locker ${info.localPosition}';
-  }
+  /// Previously showed a "Board N, Locker L" label derived from an admin-
+  /// entered board layout (see [ConfigService.lockerMapping]'s doc comment
+  /// for why that concept was removed) — every screen now just relies on
+  /// the plain, total locker count (whether admin-configured or fetched
+  /// from hardware via `syncLockersFromHardware`), so this is now always
+  /// just the flat id itself. Kept as a named method (rather than inlining
+  /// `'$lockerId'` at every call site) so a future display concept has one
+  /// place to change.
+  String lockerDisplayLabel(int lockerId) => '$lockerId';
 
   /// Fire-and-forget physical unlock, only when the real gRPC backend is
   /// selected (see `ConfigService.lockerBackend`). In `'mock'` mode this is
