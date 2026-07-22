@@ -473,39 +473,25 @@ class MockKioskRepository extends ChangeNotifier {
 
   List<LockerItem> getAllItems() => List.unmodifiable(_items);
 
-  /// The current parcel records, already in `db.json`'s JSON shape — used
-  /// by `SettingsSyncService.pushToServer` to build the `db_entries` field
-  /// it PUTs to the cloud, mirroring Android's `putSettingsToTheServer`
-  /// (which reads `db.json` straight off disk for the same purpose).
-  List<Map<String, dynamic>> itemsAsJson() =>
-      _items.map(_itemToJson).toList();
-
-  /// Replaces every local parcel record with [rawItems] (already-decoded
-  /// JSON in the same shape as `db.json` — see [_itemFromJson]) and
-  /// persists the result to `db.json`. Used by
-  /// `SettingsSyncService.pullFromServer` to mirror Android's
-  /// `readDbFromServer`, which overwrites the local parcel database with
-  /// whatever the cloud last held for this unit. Entries that don't parse
-  /// are silently dropped (same tolerance as [_loadItemsFromDisk]) rather
-  /// than aborting the whole sync over one bad record; any surviving
-  /// record whose locker id no longer exists in the current
-  /// [ConfigService.lockerMapping] is pruned by [_syncLockersFromConfig],
-  /// exactly like a normal `config.json` change would.
-  void replaceItemsFromServer(List<dynamic> rawItems) {
-    final parsed = rawItems.map(_itemFromJson).whereType<LockerItem>().toList();
-    _items
-      ..clear()
-      ..addAll(parsed);
-    _persistItems();
-    logger.i(
-      'MockKioskRepository: replaced local items with ${parsed.length} '
-      'record(s) from cloud (${rawItems.length - parsed.length} unparsable '
-      'entr${rawItems.length - parsed.length == 1 ? 'y' : 'ies'} dropped).',
-    );
-    // Also prunes any item whose locker id fell outside the current
-    // mapping, and notifies listeners — same as every other mutation here.
-    _syncLockersFromConfig();
-  }
+  /// The current parcel records, translated to Android's exact `Item`
+  /// shape (`phone`/`pin`/`lockerId`/`creationDate` only — see
+  /// `cnc-dnp-android`'s `db/Item.kt`) rather than this app's own richer
+  /// local `db.json` shape (which also carries `collectionLockerId` for
+  /// paired-locker mode, and is what [_itemToJson]/[_itemFromJson] use for
+  /// on-disk persistence). Used exclusively by
+  /// `SettingsSyncService.pushToServer` to build the `db_entries` field it
+  /// PUTs to the cloud — sending the extra `collectionLockerId` field
+  /// risked the dashboard's parser rejecting or dropping the whole record,
+  /// so this deliberately narrows to the fields VaultGroup already
+  /// understands from the Android app.
+  List<Map<String, dynamic>> cloudDbEntriesJson() => _items
+      .map((item) => {
+            'phone': item.phone,
+            'pin': item.pin,
+            'lockerId': item.lockerId,
+            'creationDate': item.creationDate.toIso8601String(),
+          })
+      .toList();
 
   /// Normalizes [phone] before comparing — defensive, in case a caller
   /// somewhere forgot to normalize first. Safe to do unconditionally since

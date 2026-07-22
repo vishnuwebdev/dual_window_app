@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 
 import '../config/config_service.dart';
 import '../utilities/logging.dart';
+import 'mqtt_sync_service.dart';
 
 /// Registers this unit with VaultGroup's cloud platform, ported from
 /// `AdminOverrideActivity.openUnitRegistration()` / `refreshJwt()` in the
@@ -174,6 +175,13 @@ class UnitRegistrationService extends ChangeNotifier {
       );
 
       logger.i('JWT refreshed and mq.json updated.');
+
+      // A fresh mq.json means a fresh MQTT identity — (re)connect right
+      // away so the cloud push-trigger (see MqttSyncService) and the next
+      // auto-push (see AutoSyncService) both use the new credentials
+      // immediately, without needing any admin UI to kick this off.
+      unawaited(MqttSyncService.instance.start());
+
       return true;
     } catch (e) {
       logger.w('refreshJwt request failed: $e');

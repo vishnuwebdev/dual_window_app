@@ -122,6 +122,7 @@ class ConfigService extends ChangeNotifier {
   static const String _kLockerBackend = 'locker_backend';
   static const String _kKioskMode = 'kiosk_mode';
   static const String _kCvmainConfigDir = 'cvmain_config_dir';
+  static const String _kCvmasterConfigDir = 'cvmaster_config_dir';
   static const String _kPairedLockerMode = 'paired_locker_mode';
   static const String _kBoardLockerCounts = 'board_locker_counts';
   static const String _kLockerPairMappings = 'locker_pair_mappings';
@@ -157,6 +158,17 @@ class ConfigService extends ChangeNotifier {
   /// Unit Registration page if a different unit ever uses a different
   /// path.
   static const String _defaultCvmainConfigDir = '/home/pi/cv/cvmain/config';
+
+  /// UNCONFIRMED — cvmaster's real on-disk path was never verified over
+  /// SSH the way [_defaultCvmainConfigDir] was (see that field's doc
+  /// comment). This is a guess based on [_defaultCvmainConfigDir]'s own
+  /// shape (`cv/cvmain/config` -> `cv/cvmaster/config`), used only as a
+  /// starting point in the "Physical unit sync" admin UI — correct it
+  /// there (Unit Registration page) once the real path is confirmed on
+  /// this deployment's Pi, the same way [_defaultCvmainConfigDir] already
+  /// was. See `SettingsSyncService`'s class doc comment for what this
+  /// feeds into.
+  static const String _defaultCvmasterConfigDir = '/home/pi/cv/cvmaster/config';
 
   /// Off by default so a developer running on macOS/Windows/Linux desktop
   /// still gets normal window chrome and can drag/resize windows freely.
@@ -196,6 +208,7 @@ class ConfigService extends ChangeNotifier {
   bool _kioskMode = _defaultKioskMode;
 
   String _cvmainConfigDir = _defaultCvmainConfigDir;
+  String _cvmasterConfigDir = _defaultCvmasterConfigDir;
 
   bool _pairedLockerMode = _defaultPairedLockerMode;
   List<int> _boardLockerCounts = _defaultBoardLockerCounts;
@@ -292,8 +305,10 @@ class ConfigService extends ChangeNotifier {
             json[_kLockerAddress] as String? ?? _defaultLockerAddress;
         _cvmainConfigDir =
             json[_kCvmainConfigDir] as String? ?? _defaultCvmainConfigDir;
+        _cvmasterConfigDir =
+            json[_kCvmasterConfigDir] as String? ?? _defaultCvmasterConfigDir;
 
-        var needsRewrite = json.length != 11 ||
+        var needsRewrite = json.length != 12 ||
             !json.containsKey(_kAdminPin) ||
             !json.containsKey(_kDropOffPin) ||
             !json.containsKey(_kSmsTemplate) ||
@@ -302,6 +317,7 @@ class ConfigService extends ChangeNotifier {
             !json.containsKey(_kLockerBackend) ||
             !json.containsKey(_kKioskMode) ||
             !json.containsKey(_kCvmainConfigDir) ||
+            !json.containsKey(_kCvmasterConfigDir) ||
             !json.containsKey(_kPairedLockerMode) ||
             !json.containsKey(_kBoardLockerCounts) ||
             !json.containsKey(_kLockerPairMappings);
@@ -401,6 +417,7 @@ class ConfigService extends ChangeNotifier {
       _kLockerBackend: _lockerBackend,
       _kKioskMode: _kioskMode,
       _kCvmainConfigDir: _cvmainConfigDir,
+      _kCvmasterConfigDir: _cvmasterConfigDir,
       _kPairedLockerMode: _pairedLockerMode,
       _kBoardLockerCounts: _boardLockerCounts,
       _kLockerPairMappings: _lockerPairMappings.map((e) => e.toJson()).toList(),
@@ -869,6 +886,20 @@ class ConfigService extends ChangeNotifier {
     logger.i('cvmain config directory updated to: "$_cvmainConfigDir"');
   }
 
+  /// The real, on-disk directory the *physical unit's* `cvmaster` process
+  /// keeps its own `config.json` in — the local counterpart to
+  /// [cvmainConfigDir], used by `SettingsSyncService` to fill the
+  /// `cvmaster_config` field it pushes to the cloud. UNCONFIRMED — see
+  /// [_defaultCvmasterConfigDir]'s doc comment; correct this on the Unit
+  /// Registration page once the real path is verified on this deployment.
+  String get cvmasterConfigDir => _cvmasterConfigDir;
+
+  Future<void> setCvmasterConfigDir(String value) async {
+    _cvmasterConfigDir = value.trim();
+    await _persistConfig();
+    logger.i('cvmaster config directory updated to: "$_cvmasterConfigDir"');
+  }
+
   /// Reset all configuration to defaults
   Future<void> reset() async {
     _adminPin = _defaultAdminPin;
@@ -879,6 +910,7 @@ class ConfigService extends ChangeNotifier {
     _lockerBackend = _defaultLockerBackend;
     _kioskMode = _defaultKioskMode;
     _cvmainConfigDir = _defaultCvmainConfigDir;
+    _cvmasterConfigDir = _defaultCvmasterConfigDir;
     _pairedLockerMode = _defaultPairedLockerMode;
     _boardLockerCounts = _defaultBoardLockerCounts;
     _lockerPairMappings = _defaultLockerPairMappings;

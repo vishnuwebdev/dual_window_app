@@ -1,10 +1,6 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../../core/config/config_service.dart';
-import '../../core/registration/mqtt_sync_service.dart';
-import '../../core/registration/settings_sync_service.dart';
 import '../../core/registration/unit_registration_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../widgets/admin_section_card.dart';
@@ -44,9 +40,9 @@ class _UnitRegistrationPageState extends State<UnitRegistrationPage> {
   final _codeController = TextEditingController();
   final _service = UnitRegistrationService.instance;
   final _config = ConfigService();
-  final _mqtt = MqttSyncService.instance;
 
   late final TextEditingController _cvmainDirController;
+  late final TextEditingController _cvmasterDirController;
 
   String? _resultMessage;
   bool _resultIsError = false;
@@ -55,22 +51,18 @@ class _UnitRegistrationPageState extends State<UnitRegistrationPage> {
   bool _resetting = false;
   String? _syncSavedMessage;
 
-  bool _pulling = false;
-  bool _pushing = false;
-  bool _reconnectingMqtt = false;
-  String? _cloudSyncMessage;
-  bool _cloudSyncIsError = false;
-
   @override
   void initState() {
     super.initState();
     _cvmainDirController = TextEditingController(text: _config.cvmainConfigDir);
+    _cvmasterDirController = TextEditingController(text: _config.cvmasterConfigDir);
   }
 
   @override
   void dispose() {
     _codeController.dispose();
     _cvmainDirController.dispose();
+    _cvmasterDirController.dispose();
     super.dispose();
   }
 
@@ -101,11 +93,6 @@ class _UnitRegistrationPageState extends State<UnitRegistrationPage> {
     final mirrorResult = await _service.mirrorToCvmainConfig();
     if (mirrorResult != null) buffer.write('\n\n$mirrorResult');
 
-    // A fresh mq.json means a fresh MQTT identity — reconnect right away
-    // rather than leaving the admin to notice the "Cloud settings sync"
-    // card still shows the pre-registration disconnected status.
-    unawaited(_mqtt.start());
-
     if (!mounted) return;
     setState(() {
       _resultIsError = false;
@@ -116,7 +103,6 @@ class _UnitRegistrationPageState extends State<UnitRegistrationPage> {
   Future<void> _refreshJwt() async {
     setState(() => _refreshingJwt = true);
     final ok = await _service.refreshJwt();
-    if (ok) unawaited(_mqtt.start());
     if (!mounted) return;
     setState(() {
       _refreshingJwt = false;
@@ -139,52 +125,9 @@ class _UnitRegistrationPageState extends State<UnitRegistrationPage> {
     });
   }
 
-  /// Mirrors Android's `readSettingsFromServer`/`readDbFromServer` — pulls
-  /// the SMS template, locker sizes, cvmain's native config, and the
-  /// parcel database from the cloud. See `SettingsSyncService` for the
-  /// full field-by-field breakdown of what's applied and what's skipped.
-  Future<void> _pullFromCloud() async {
-    setState(() {
-      _pulling = true;
-      _cloudSyncMessage = null;
-    });
-    final result = await SettingsSyncService.instance.pullFromServer();
-    if (!mounted) return;
-    setState(() {
-      _pulling = false;
-      _cloudSyncIsError = !result.success;
-      _cloudSyncMessage = result.message;
-    });
-  }
-
-  /// Mirrors Android's `putSettingsToTheServer` — pushes the SMS template,
-  /// locker sizes, parcel database, and admin PIN to the cloud.
-  Future<void> _pushToCloud() async {
-    setState(() {
-      _pushing = true;
-      _cloudSyncMessage = null;
-    });
-    final result = await SettingsSyncService.instance.pushToServer();
-    if (!mounted) return;
-    setState(() {
-      _pushing = false;
-      _cloudSyncIsError = !result.success;
-      _cloudSyncMessage = result.message;
-    });
-  }
-
-  /// Re-runs `MqttSyncService.start()` — useful right after "Refresh JWT"
-  /// above rotates the password in `mq.json`, or if the broker connection
-  /// dropped and didn't auto-recover.
-  Future<void> _reconnectMqtt() async {
-    setState(() => _reconnectingMqtt = true);
-    await _mqtt.start();
-    if (!mounted) return;
-    setState(() => _reconnectingMqtt = false);
-  }
-
   Future<void> _saveSyncSettings() async {
     await _config.setCvmainConfigDir(_cvmainDirController.text);
+    await _config.setCvmasterConfigDir(_cvmasterDirController.text);
     if (!mounted) return;
     setState(() {
       _syncSavedMessage = 'Saved.';
@@ -402,110 +345,6 @@ class _UnitRegistrationPageState extends State<UnitRegistrationPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text('Cloud settings sync', style: AdminTextStyles.sectionTitle),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Manually pull/push the SMS template, locker sizes, and '
-                    'parcel database to/from VaultGroup\'s cloud — mirrors '
-                    'the Android app\'s settings sync. The cloud can also '
-                    'trigger this automatically over MQTT once this unit '
-                    'is registered above; connection status below.',
-                    style: AdminTextStyles.body,
-                  ),
-                  const SizedBox(height: 14),
-                  AnimatedBuilder(
-                    animation: _mqtt,
-                    builder: (context, _) => Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: _mqtt.isConnected
-                            ? AppColors.teal.withOpacity(0.15)
-                            : AppColors.adminFieldFill,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: _mqtt.isConnected ? AppColors.teal : AppColors.panelBorder,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            _mqtt.isConnected ? Icons.cloud_done : Icons.cloud_off,
-                            size: 18,
-                            color: _mqtt.isConnected ? AppColors.teal : Colors.white60,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              'MQTT: ${_mqtt.status}',
-                              style: const TextStyle(fontFamily: 'Metropolis', color: Colors.white70, fontSize: 12),
-                            ),
-                          ),
-                          TextButton(
-                            onPressed: _reconnectingMqtt ? null : _reconnectMqtt,
-                            child: _reconnectingMqtt
-                                ? const SizedBox(
-                                    width: 14,
-                                    height: 14,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.teal),
-                                  )
-                                : const Text('Reconnect'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          style: AdminInputStyle.outlinedButton,
-                          onPressed: _pulling ? null : _pullFromCloud,
-                          icon: _pulling
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.teal),
-                                )
-                              : const Icon(Icons.cloud_download_outlined),
-                          label: const Text('Pull from cloud'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          style: AdminInputStyle.outlinedButton,
-                          onPressed: _pushing ? null : _pushToCloud,
-                          icon: _pushing
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.teal),
-                                )
-                              : const Icon(Icons.cloud_upload_outlined),
-                          label: const Text('Push to cloud'),
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (_cloudSyncMessage != null) ...[
-                    const SizedBox(height: 10),
-                    Text(
-                      _cloudSyncMessage!,
-                      style: TextStyle(
-                        fontFamily: 'Metropolis',
-                        color: _cloudSyncIsError ? Colors.redAccent[100] : Colors.greenAccent[400],
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            AdminSectionCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
                   const Text('Physical unit sync', style: AdminTextStyles.sectionTitle),
                   const SizedBox(height: 6),
                   const Text(
@@ -517,7 +356,11 @@ class _UnitRegistrationPageState extends State<UnitRegistrationPage> {
                     'copy, no special permissions needed) — the directory '
                     'below is already set to this unit\'s confirmed path; '
                     'only change it if you\'re pointing at a different '
-                    'unit, or clear it to skip mirroring entirely.',
+                    'unit, or clear it to skip mirroring entirely. cvmain\'s '
+                    'and cvmaster\'s config directories below are also what '
+                    'the cloud settings sync (see Configuration page) reads '
+                    'their native config from — no manual action needed '
+                    'there, it pushes automatically on every change.',
                     style: AdminTextStyles.body,
                   ),
                   const SizedBox(height: 14),
@@ -528,6 +371,22 @@ class _UnitRegistrationPageState extends State<UnitRegistrationPage> {
                     style: AdminTextStyles.fieldInput,
                     decoration: AdminInputStyle.fieldDecoration(
                       hint: 'e.g. /home/pi/cv/cvmain/config — leave blank to skip',
+                    ),
+                    onSubmitted: (_) => _saveSyncSettings(),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'cvmaster config directory on the unit (unconfirmed — '
+                    'a guess based on the cvmain path above; correct it '
+                    'once verified on this Pi)',
+                    style: AdminTextStyles.sectionTitle,
+                  ),
+                  const SizedBox(height: 8),
+                  KeyboardTextField(
+                    controller: _cvmasterDirController,
+                    style: AdminTextStyles.fieldInput,
+                    decoration: AdminInputStyle.fieldDecoration(
+                      hint: 'e.g. /home/pi/cv/cvmaster/config — leave blank to skip',
                     ),
                     onSubmitted: (_) => _saveSyncSettings(),
                   ),

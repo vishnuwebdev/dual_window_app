@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import '../../core/config/config_service.dart';
 import '../../core/mock/mock_kiosk_repository.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/utilities/beacon_discovery_service.dart';
 import '../../widgets/admin_section_card.dart';
 import '../../widgets/keyboard_text_field.dart';
 
@@ -58,8 +57,6 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
   String? _connectionResult;
   bool _syncingLockers = false;
   String? _syncResult;
-  bool _scanningForBeacon = false;
-  String? _beaconScanResult;
 
   // --- Paired slave-board mode ------------------------------------------
   //
@@ -293,35 +290,6 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
     });
   }
 
-  /// Listens on UDP port 2320 for a `VG.BRIDGE.BEACON` broadcast (see
-  /// `BeaconDiscoveryService`, ported from the Android app's
-  /// `BroadcastListener`) and fills the address field with whatever IP
-  /// answers, on the assumption the unit's gRPC port is the standard 7777
-  /// — same default `ConfigService._defaultLockerAddress` uses. Does not
-  /// save automatically; the admin still has to press "Save" below, same
-  /// as typing the address in by hand.
-  Future<void> _scanForBeacon() async {
-    setState(() {
-      _scanningForBeacon = true;
-      _beaconScanResult = null;
-    });
-
-    final ip = await BeaconDiscoveryService.scanForBeacon();
-
-    if (!mounted) return;
-    setState(() {
-      _scanningForBeacon = false;
-      if (ip == null) {
-        _beaconScanResult =
-            'No beacon heard on UDP port 2320 within 10s. Make sure the '
-            'unit is powered on and reachable on this network.';
-      } else {
-        _addressController.text = '$ip:7777';
-        _beaconScanResult = 'Found unit at $ip — address field updated. Press Save to apply.';
-      }
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final isGrpc = _backend == 'grpc';
@@ -499,22 +467,6 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                             : const Icon(Icons.wifi_tethering),
                         label: const Text('Test Connection'),
                       ),
-                      const SizedBox(width: 12),
-                      OutlinedButton.icon(
-                        style: AdminInputStyle.outlinedButton,
-                        onPressed: _scanningForBeacon ? null : _scanForBeacon,
-                        icon: _scanningForBeacon
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: AppColors.teal,
-                                ),
-                              )
-                            : const Icon(Icons.radar),
-                        label: const Text('Scan for unit'),
-                      ),
                       if (_connectionResult != null) ...[
                         const SizedBox(width: 12),
                         Expanded(
@@ -532,18 +484,6 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                       ],
                     ],
                   ),
-                  if (_beaconScanResult != null) ...[
-                    const SizedBox(height: 10),
-                    Text(
-                      _beaconScanResult!,
-                      style: TextStyle(
-                        fontFamily: 'Metropolis',
-                        color: _beaconScanResult!.startsWith('Found unit')
-                            ? Colors.greenAccent[400]
-                            : Colors.redAccent[100],
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),

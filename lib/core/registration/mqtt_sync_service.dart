@@ -9,24 +9,28 @@ import 'package:mqtt_client/mqtt_server_client.dart';
 import '../utilities/logging.dart';
 import 'settings_sync_service.dart';
 
-/// Subscribes to VaultGroup's cloud MQTT broker and auto-triggers
-/// [SettingsSyncService] when the cloud pushes a settings/DB sync command —
-/// mirrors `ClickNCollectApp.onCreate`'s `MqttRunner.startProcess` callback
-/// in the Android app (`cnc-dnp-android`), which reacts to
-/// `upload-settings` / `get-settings` / `upload-db` by calling the
-/// equivalent of [SettingsSyncService.pushToServer] /
-/// [SettingsSyncService.pullFromServer].
+/// Subscribes to VaultGroup's cloud MQTT broker so a fresh push can be
+/// triggered the moment the cloud asks for one — the read-only-for-cloud
+/// counterpart to `ClickNCollectApp.onCreate`'s `MqttRunner.startProcess`
+/// callback in the Android app (`cnc-dnp-android`), which reacts to
+/// `upload-settings` / `get-settings` / `upload-db`.
+///
+/// DELIBERATELY PUSH-ONLY: every one of those three commands — regardless
+/// of which one arrives — just calls [SettingsSyncService.pushToServer]
+/// here, never a pull. See [SettingsSyncService]'s class doc comment for
+/// why a cloud -> device pull was removed entirely (it silently overwrote
+/// this unit's real locker mapping/pairing the first time it was tried).
+/// In practice [AutoSyncService] already pushes automatically on every
+/// local change, so this mostly exists so VaultGroup's dashboard doesn't
+/// have to wait for the next local edit if it wants a fresh read right
+/// now.
 ///
 /// UNCONFIRMED PROTOCOL DETAILS: the Android app's actual MQTT topic
-/// name(s)/subscription pattern and JWT-refresh timing live inside a
-/// closed-source vendor AAR (`com.cellvault.libcvmqtt`/`MqttRunner` — see
-/// `MIGRATION_FEASIBILITY.md` §2 in this repo), not anything with visible
-/// source here or in the Android repo. All the Android callback shows is
-/// that its `p1` argument is a string checked with
-/// `.contains("upload-settings")` etc. — it isn't even clear from that
-/// whether `p1` is the MQTT topic or the message payload. This
-/// implementation's best-effort guess, to be corrected against the real
-/// broker once verified:
+/// name(s)/subscription pattern live inside a closed-source vendor AAR
+/// (`com.cellvault.libcvmqtt`/`MqttRunner` — see `MIGRATION_FEASIBILITY.md`
+/// §2 in this repo), not anything with visible source here or in the
+/// Android repo. This implementation's best-effort guess, to be corrected
+/// against the real broker once verified:
 ///  - Subscribes to `<username>/#` — every topic under this unit's own
 ///    registered identity (see `UnitRegistrationService.username`), on the
 ///    assumption commands are scoped per-unit the same way audit events
@@ -34,10 +38,11 @@ import 'settings_sync_service.dart';
 ///  - On every message, checks *both* the topic and the decoded payload
 ///    text for the substrings `"upload-settings"`, `"get-settings"`, and
 ///    `"upload-db"` — matching Android's own tolerant `.contains(...)`
-///    check rather than assuming an exact topic match.
-/// If real commands arrive under a different topic shape, only
-/// [_topicFilter] and [_onMessage] below need to change — nothing else in
-/// this app depends on the exact wire format.
+///    check rather than assuming an exact topic match. All three now do
+///    the exact same thing (push), so this is really just "did the cloud
+///    say anything that looks like a sync request" — if that turns out to
+///    be too broad (e.g. false-triggers on unrelated traffic), narrow
+///    [_onMessage] once the real topic shape is confirmed.
 class MqttSyncService extends ChangeNotifier {
   MqttSyncService._();
 
@@ -156,15 +161,12 @@ class MqttSyncService extends ChangeNotifier {
       final haystack = '${event.topic} $payload';
       logger.d('MqttSyncService: message on "${event.topic}": $payload');
 
-      if (haystack.contains('upload-settings')) {
-        logger.i('MqttSyncService: "upload-settings" command received — pushing to cloud.');
+      final isSyncRequest = haystack.contains('upload-settings') ||
+          haystack.contains('get-settings') ||
+          haystack.contains('upload-db');
+      if (isSyncRequest) {
+        logger.i('MqttSyncService: sync command received on "${event.topic}" — pushing current state to cloud.');
         unawaited(SettingsSyncService.instance.pushToServer());
-      } else if (haystack.contains('get-settings')) {
-        logger.i('MqttSyncService: "get-settings" command received — pulling from cloud.');
-        unawaited(SettingsSyncService.instance.pullFromServer());
-      } else if (haystack.contains('upload-db')) {
-        logger.i('MqttSyncService: "upload-db" command received — pulling from cloud.');
-        unawaited(SettingsSyncService.instance.pullFromServer());
       }
     }
   }

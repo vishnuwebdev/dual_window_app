@@ -8,11 +8,11 @@ import '../config/config_service.dart';
 import '../mock/mock_kiosk_repository.dart';
 import '../utilities/logging.dart';
 
-/// Result of a [SettingsSyncService] pull/push — kept as a tiny value type
+/// Result of a [SettingsSyncService] push — kept as a tiny value type
 /// (matching `LockerResult`/`LockerResponse` elsewhere in this codebase)
-/// rather than a bare `String?`, since a *successful* sync still has
-/// several independent notes worth surfacing to the admin (which fields
-/// actually changed, which were skipped and why).
+/// rather than a bare `String?`, since callers (currently just logging —
+/// see `AutoSyncService`/`MqttSyncService`) want both a success flag and a
+/// human-readable reason.
 class SettingsSyncResult {
   const SettingsSyncResult({required this.success, required this.message});
 
@@ -20,11 +20,26 @@ class SettingsSyncResult {
   final String message;
 }
 
-/// Syncs this unit's settings (SMS template, locker sizes) and parcel
-/// database with VaultGroup's cloud — mirrors the Android app's
-/// `SettingsService.readSettingsFromServer` / `readDbFromServer` /
-/// `putSettingsToTheServer` (GET/PUT `https://saas.vaultgroup-cloud.com/settings/unit`,
-/// JWT bearer auth — see `cnc-dnp-android`'s `util/SettingsService.kt`).
+/// Pushes this unit's current settings (SMS template, locker sizes, cvmain
+/// and cvmaster's native config) and parcel database *up* to VaultGroup's
+/// cloud — mirrors the device -> cloud half of the Android app's
+/// `SettingsService.putSettingsToTheServer` (PUT
+/// `https://saas.vaultgroup-cloud.com/settings/unit`, JWT bearer auth —
+/// see `cnc-dnp-android`'s `util/SettingsService.kt`).
+///
+/// DELIBERATELY ONE-WAY: unlike Android (and an earlier version of this
+/// class), there is **no** cloud -> device pull anymore. A pull applied
+/// whatever the cloud happened to be holding straight onto
+/// `ConfigService`/`MockKioskRepository` — which, the first time this was
+/// tried against a real deployment, silently overwrote this unit's
+/// carefully-configured real locker mapping/pairing with stale cloud data
+/// and broke the Configuration page's "Sync Lockers from Hardware" flow.
+/// The actual requirement is simpler and safer: VaultGroup should be able
+/// to *read* this unit's state, not write to it — so this service only
+/// ever sends data outward. If a real need for cloud -> device sync shows
+/// up later, it should be a deliberate, explicitly-confirmed action (e.g.
+/// an admin-triggered "Apply cloud settings" button with a diff preview),
+/// not something that runs automatically the way [pushToServer] now does.
 ///
 /// Auth: reuses the JWT `UnitRegistrationService.refreshJwt` already wrote
 /// to `mq.json`'s `password` field — the exact same file/field the Android
@@ -32,29 +47,13 @@ class SettingsSyncResult {
 /// cvmain's own sandboxed directory; here it's next to `config.json`/
 /// `db.json` — see `UnitRegistrationService`'s class doc comment for why).
 ///
-/// SCOPE NOTE — `config`/`cvmaster_config`: Android's version also
-/// round-trips cvmain's own native `config.json`/`cvmaster_config` (files
-/// inside cvmain's *own* directory, not anything the app itself manages)
-/// under those two keys. This app's own `config.json` (admin PIN, locker
-/// mapping, etc. — see `ConfigService`) is a completely different file
-/// with a different schema, so it is never confused with the `config` key
-/// here. Instead:
-///  - On [pullFromServer], the server's `config` blob (cvmain's native
-///    config) is written straight to `<cvmainConfigDir>/config.json` — see
-///    `ConfigService.cvmainConfigDir`, the same directory
-///    `UnitRegistrationService.mirrorToCvmainConfig` already writes
-///    `auth.json`/`mq.json` into. Skipped, with a note, if that directory
-///    is blank. `cvmaster_config`'s real on-disk path was never confirmed
-///    for this deployment (unlike cvmain's, which was verified over SSH —
-///    see `ConfigService.cvmainConfigDir`'s doc comment), so it's
-///    intentionally left unwritten rather than guessed at.
-///  - On [pushToServer], `config` is read back from that same
-///    `<cvmainConfigDir>/config.json` if present (`{}` otherwise), and
-///    `cvmaster_config` is always sent as `{}` for the same reason.
-///  - Exactly like `UnitRegistrationService.mirrorToCvmainConfig`, writing
-///    a fresh `config.json` here does **not** restart cvmain — it still
-///    needs a manual restart (`sudo pkill -f cvmain_rs`) to actually pick
-///    it up.
+/// Called from two places, both driven without any admin having to press
+/// anything (see `AutoSyncService` and `MqttSyncService`):
+///  - [AutoSyncService] debounces and calls this automatically whenever
+///    `ConfigService`, `MockKioskRepository`, or cvmain/cvmaster's own
+///    config files change.
+///  - [MqttSyncService] calls this immediately whenever VaultGroup's cloud
+///    asks for a fresh copy over MQTT.
 class SettingsSyncService {
   SettingsSyncService._();
 
@@ -64,11 +63,6 @@ class SettingsSyncService {
   static const _timeout = Duration(seconds: 20);
 
   File get _mqFile => File('${Directory.current.path}/mq.json');
-
-  File _cvmainNativeConfigFile() {
-    final dir = ConfigService().cvmainConfigDir;
-    return File('$dir/config.json');
-  }
 
   Future<String?> _readJwt() async {
     try {
@@ -83,131 +77,44 @@ class SettingsSyncService {
     }
   }
 
-  /// GET `/settings/unit` — pulls the SMS template, locker sizes, cvmain's
-  /// native config (best-effort — see the class doc comment's SCOPE NOTE),
-  /// and the parcel database, applying each to local state. Mirrors
-  /// Android's `readSettingsFromServer`/`readDbFromServer` combined into
-  /// one call, since both hit the same endpoint and this app has no
-  /// separate reason to split them.
-  ///
-  /// A rejected/malformed individual field (e.g. a template that fails
-  /// `ConfigService.validateSmsTemplate`) is noted in the result message
-  /// and skipped — it never aborts the other fields' sync, mirroring how
-  /// every setter in `ConfigService` already refuses bad input without
-  /// touching what was there before.
-  Future<SettingsSyncResult> pullFromServer() async {
-    final jwt = await _readJwt();
-    if (jwt == null) {
-      return const SettingsSyncResult(
-        success: false,
-        message:
-            'No JWT available — register the unit and refresh its JWT first (Unit Registration page).',
-      );
-    }
-
+  /// Best-effort read of a native `config.json` sitting in [dir] — used
+  /// for both cvmain's (confirmed path) and cvmaster's (guessed path — see
+  /// `ConfigService.cvmasterConfigDir`) own config files. Returns `{}` if
+  /// [dir] is blank, the file doesn't exist, or it fails to parse — a
+  /// missing/bad native config file should never abort the rest of the
+  /// push.
+  Future<Map<String, dynamic>> _readNativeConfig(String dir, String label) async {
+    if (dir.isEmpty) return const {};
     try {
-      final response = await http.get(
-        Uri.parse('$_baseUrl/settings/unit'),
-        headers: {'Authorization': 'Bearer $jwt'},
-      ).timeout(_timeout);
-
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        logger.w(
-            'SettingsSyncService.pull failed: ${response.statusCode} ${response.body}');
-        return SettingsSyncResult(
-          success: false,
-          message: 'Pull failed (HTTP ${response.statusCode}).',
-        );
-      }
-
-      final body = jsonDecode(response.body) as Map<String, dynamic>;
-      final content = body['content'] as Map<String, dynamic>?;
-      if (content == null) {
-        return const SettingsSyncResult(
-          success: false,
-          message: 'Server response had no "content" field.',
-        );
-      }
-
-      final notes = <String>[];
-
-      final sizesRaw = content['lockers_sizes'];
-      if (sizesRaw is List && sizesRaw.isNotEmpty) {
-        final csv = sizesRaw.map((s) => s.toString().toLowerCase()).join(',');
-        final error = await ConfigService().setLockerMapping(csv);
-        notes.add(error != null
-            ? 'Locker sizes from cloud were rejected: $error'
-            : 'Locker mapping updated (${sizesRaw.length} locker(s)).');
-      }
-
-      final template = content['template'];
-      if (template is String && template.isNotEmpty) {
-        final error = await ConfigService().setSmsTemplate(template);
-        notes.add(error != null
-            ? 'SMS template from cloud was rejected: $error'
-            : 'SMS template updated.');
-      }
-
-      final config = content['config'];
-      if (config is Map) {
-        final dir = ConfigService().cvmainConfigDir;
-        if (dir.isEmpty) {
-          notes.add(
-            'cvmain config directory is blank — cvmain\'s native config '
-            'from the cloud was not written anywhere (set it on the Unit '
-            'Registration page).',
-          );
-        } else {
-          try {
-            final file = _cvmainNativeConfigFile();
-            await file.parent.create(recursive: true);
-            await file.writeAsString(
-                const JsonEncoder.withIndent('  ').convert(config));
-            notes.add(
-                'cvmain\'s native config.json written to $dir — restart cvmain to apply.');
-          } catch (e) {
-            notes.add('Failed to write cvmain\'s native config.json: $e');
-          }
-        }
-      }
-
-      final dbEntries = content['db_entries'];
-      List<dynamic>? items;
-      if (dbEntries is String && dbEntries.isNotEmpty) {
-        try {
-          final decoded = jsonDecode(dbEntries);
-          if (decoded is List) items = decoded;
-        } catch (e) {
-          notes.add('Could not parse "db_entries" as JSON: $e');
-        }
-      } else if (dbEntries is List) {
-        items = dbEntries;
-      }
-      if (items != null) {
-        MockKioskRepository.instance.replaceItemsFromServer(items);
-        notes.add(
-            'Parcel database replaced with ${items.length} record(s) from cloud.');
-      }
-
-      final message =
-          notes.isEmpty ? 'Nothing to sync — server returned no recognized fields.' : notes.join(' ');
-      logger.i('SettingsSyncService.pull succeeded: $message');
-      return SettingsSyncResult(success: true, message: message);
-    } on TimeoutException {
-      return const SettingsSyncResult(
-        success: false,
-        message: 'Timed out reaching VaultGroup — check network connectivity.',
-      );
+      final file = File('$dir/config.json');
+      if (!await file.exists()) return const {};
+      final decoded = jsonDecode(await file.readAsString());
+      if (decoded is Map<String, dynamic>) return decoded;
+      logger.w('SettingsSyncService: $label config.json at "$dir" was not a JSON object.');
+      return const {};
     } catch (e) {
-      logger.w('SettingsSyncService.pull failed: $e');
-      return SettingsSyncResult(success: false, message: 'Could not reach VaultGroup: $e');
+      logger.w('SettingsSyncService: could not read $label config.json at "$dir": $e');
+      return const {};
     }
   }
 
-  /// PUT `/settings/unit` — pushes the SMS template, locker sizes, parcel
-  /// database, and admin PIN back to the cloud, mirroring Android's
-  /// `putSettingsToTheServer`. `config`/`cvmaster_config` are populated
-  /// best-effort — see the class doc comment's SCOPE NOTE.
+  /// PUT `/settings/unit` — pushes the SMS template, locker sizes, cvmain's
+  /// and cvmaster's native config (best-effort — see
+  /// `ConfigService.cvmainConfigDir`/`cvmasterConfigDir`), the parcel
+  /// database, and the admin PIN. Mirrors Android's
+  /// `putSettingsToTheServer`, with two intentional format fixes found
+  /// while integrating this against the real VaultGroup dashboard:
+  ///  - Locker sizes are sent **uppercase** (`"SMALL"`, not `"small"`) —
+  ///    Android sends `Locker.Size` Kotlin enum constants via `.toString()`,
+  ///    which are uppercase; this app stores sizes lowercase internally
+  ///    (`ConfigService.lockerMapping`) but must convert on the way out or
+  ///    the dashboard doesn't recognize them.
+  ///  - `db_entries` is sent in Android's exact `Item` shape
+  ///    (`phone`/`pin`/`lockerId`/`creationDate` only) via
+  ///    `MockKioskRepository.cloudDbEntriesJson()`, rather than this app's
+  ///    richer local shape (which also carries `collectionLockerId` for
+  ///    paired-locker mode) — an extra field the dashboard doesn't expect
+  ///    risked it silently dropping the whole record.
   Future<SettingsSyncResult> pushToServer() async {
     final jwt = await _readJwt();
     if (jwt == null) {
@@ -218,31 +125,16 @@ class SettingsSyncService {
       );
     }
 
-    Map<String, dynamic> config = {};
-    final cvmainDir = ConfigService().cvmainConfigDir;
-    if (cvmainDir.isNotEmpty) {
-      try {
-        final file = _cvmainNativeConfigFile();
-        if (await file.exists()) {
-          final decoded = jsonDecode(await file.readAsString());
-          if (decoded is Map<String, dynamic>) config = decoded;
-        }
-      } catch (e) {
-        logger.w(
-            'SettingsSyncService.push: could not read cvmain native config.json: $e');
-      }
-    }
-
     final cfg = ConfigService();
+    final config = await _readNativeConfig(cfg.cvmainConfigDir, 'cvmain');
+    final cvmasterConfig = await _readNativeConfig(cfg.cvmasterConfigDir, 'cvmaster');
+
     final body = jsonEncode({
       'config': config,
-      // cvmaster_config's real on-disk path was never confirmed for this
-      // deployment — see the class doc comment's SCOPE NOTE — so this is
-      // always sent empty rather than guessed at.
-      'cvmaster_config': const <String, dynamic>{},
+      'cvmaster_config': cvmasterConfig,
       'template': cfg.smsTemplate,
-      'lockers_sizes': cfg.lockerMapping.map((e) => e.size).toList(),
-      'db_entries': MockKioskRepository.instance.itemsAsJson(),
+      'lockers_sizes': cfg.lockerMapping.map((e) => e.size.toUpperCase()).toList(),
+      'db_entries': MockKioskRepository.instance.cloudDbEntriesJson(),
       // Closest local analogue of Android's `admin.json`-backed admin
       // password — this app keeps that as `ConfigService.adminPin`.
       'admin_password': cfg.adminPin,

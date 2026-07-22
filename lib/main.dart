@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'core/config/config_service.dart';
 import 'core/mock/mock_kiosk_repository.dart';
+import 'core/registration/auto_sync_service.dart';
 import 'core/registration/mqtt_sync_service.dart';
 import 'core/registration/unit_registration_service.dart';
 import 'models/window_type.dart';
@@ -86,6 +87,12 @@ Future<void> _runAdminWindow() async {
   // mq.json), and every failure inside is caught and logged rather than
   // thrown past here.
   unawaited(MqttSyncService.instance.start());
+
+  // Automatic device -> cloud push on every local config/db change — see
+  // AutoSyncService's class doc comment. Same "one owner, Admin window
+  // only" reasoning as MqttSyncService above. Synchronous (just registers
+  // listeners), so no need for `unawaited`.
+  AutoSyncService.instance.start();
 }
 
 Future<void> _runCustomerWindow() async {
