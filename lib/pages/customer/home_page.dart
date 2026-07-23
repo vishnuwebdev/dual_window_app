@@ -154,7 +154,7 @@ class _HomePageState extends State<HomePage> {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 30.0),
                     child: Image.asset('assets/images/click_n_collect.png',
-                        height: 120),
+                        height: 200),
                   ),
                   // Matches `gifImageView` in `activity_main.xml`: the
                   // animated hint sits just beneath the button, pointing

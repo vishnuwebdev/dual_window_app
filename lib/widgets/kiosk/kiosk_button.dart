@@ -14,7 +14,7 @@ class KioskButton extends StatelessWidget {
     required this.label,
     required this.onPressed,
     this.width = 270.0,
-    this.height = 90.0,
+    this.height = 100.0,
     this.outerColor = AppColors.buttonOuter,
     this.innerColor = AppColors.buttonInner,
     this.borderWidth = 7.0,
