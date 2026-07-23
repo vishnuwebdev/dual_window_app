@@ -34,7 +34,6 @@
   "cvmain_config_dir": "/home/pi/cv/cvmain/config",
   "cvmaster_config_dir": "/home/pi/cv/cvmaster/config",
   "paired_locker_mode": true,
-  "board_locker_counts": [],
   "locker_pair_mappings": [
     {
       "dropoffLockerId": 4,

@@ -228,7 +228,7 @@ class _HomePageState extends State<HomePage> {
                 InkWell(
                   onTap: _handleHelp,
                   borderRadius: BorderRadius.circular(8),
-                  child: Image.asset('assets/images/help.png', height: 44),
+                  child: Image.asset('assets/images/help.png', height: 60),
                 ),
                 const SizedBox(width: 16),
                 GestureDetector(
