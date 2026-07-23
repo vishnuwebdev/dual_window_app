@@ -25,17 +25,21 @@ import 'settings_sync_service.dart';
 /// have to wait for the next local edit if it wants a fresh read right
 /// now.
 ///
-/// UNCONFIRMED PROTOCOL DETAILS: the Android app's actual MQTT topic
-/// name(s)/subscription pattern live inside a closed-source vendor AAR
-/// (`com.cellvault.libcvmqtt`/`MqttRunner` — see `MIGRATION_FEASIBILITY.md`
-/// §2 in this repo), not anything with visible source here or in the
-/// Android repo. This implementation's best-effort guess, to be corrected
-/// against the real broker once verified:
-///  - Subscribes to `<username>/#` — every topic under this unit's own
-///    registered identity (see `UnitRegistrationService.username`), on the
-///    assumption commands are scoped per-unit the same way audit events
-///    are (see `LockerGrpcService.userAudit`).
-///  - On every message, checks *both* the topic and the decoded payload
+/// TOPIC: derived from the JWT itself rather than guessed. This unit's
+/// real `mq.json` JWT (decoded 2026-07-23) carries an `acl` claim —
+/// `{"sub":["s2u/<username>/#"],"pub":["u2s/<username>/#"]}` — which is
+/// the broker's own record of what this credential may subscribe/publish
+/// to. An earlier version of this class subscribed to the bare
+/// `<username>/#` (a guess made before this JWT was inspected), which
+/// does not match `s2u/<username>/#` and would never have received
+/// anything the broker actually delivers under that ACL. [start]/
+/// [_subscribeTopicFromJwt] now reads the `acl.sub` claim straight out of
+/// the JWT at connect time, so this keeps working even if VaultGroup
+/// changes the prefix or scopes it differently per account; the
+/// `s2u/<username>/#` shape is kept only as a fallback if that claim is
+/// ever missing or unparseable.
+///
+/// On every message, [_onMessage] checks *both* the topic and the decoded payload
 ///    text for the substrings `"upload-settings"`, `"get-settings"`, and
 ///    `"upload-db"` — matching Android's own tolerant `.contains(...)`
 ///    check rather than assuming an exact topic match. All three now do
@@ -139,7 +143,8 @@ class MqttSyncService extends ChangeNotifier {
         return;
       }
 
-      final topicFilter = '$username/#';
+      final topicFilter =
+          _subscribeTopicFromJwt(password) ?? 's2u/$username/#';
       client.subscribe(topicFilter, MqttQos.atLeastOnce);
       client.updates!.listen(_onMessage);
       logger.i('MqttSyncService: subscribed to "$topicFilter".');
@@ -147,6 +152,34 @@ class MqttSyncService extends ChangeNotifier {
       _setStatus('start() failed: $e');
     } finally {
       _connecting = false;
+    }
+  }
+
+  /// Pulls the broker-granted subscribe topic straight out of the JWT's
+  /// own `acl.sub` claim (`{"sub":["s2u/<username>/#"],"pub":[...]}` —
+  /// confirmed by decoding this unit's real `mq.json` password field).
+  /// This is a plain base64 decode of the JWT payload segment, not a
+  /// signature check — fine here since the JWT is already trusted enough
+  /// to authenticate the MQTT connection itself; the only thing read out
+  /// of it is which topic the broker will actually deliver messages on.
+  /// Returns `null` (caller falls back to a hardcoded guess) if the token
+  /// isn't a 3-part JWT, has no `acl.sub` claim, or fails to parse.
+  String? _subscribeTopicFromJwt(String jwt) {
+    try {
+      final parts = jwt.split('.');
+      if (parts.length != 3) return null;
+      var payload = parts[1];
+      payload += '=' * ((4 - payload.length % 4) % 4);
+      final decoded = utf8.decode(base64Url.decode(payload));
+      final json = jsonDecode(decoded) as Map<String, dynamic>;
+      final acl = json['acl'] as Map<String, dynamic>?;
+      final sub = acl?['sub'] as List?;
+      if (sub == null || sub.isEmpty) return null;
+      final topic = sub.first as String?;
+      return (topic == null || topic.isEmpty) ? null : topic;
+    } catch (e) {
+      logger.w('MqttSyncService: could not decode JWT to derive subscribe topic: $e');
+      return null;
     }
   }
 
