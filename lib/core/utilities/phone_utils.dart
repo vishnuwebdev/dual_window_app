@@ -45,16 +45,16 @@ class PhoneUtils {
     return '+27$digits';
   }
 
-  /// Ported from `UtilService.validatePhoneNumber`: either a local
-  /// 10-digit `0XXXXXXXXX` number, or an international `+`-prefixed
-  /// number (max 12 digits normally, 15 when [isGlobal] is on). In
-  /// practice every call site normalizes before validating now (see
-  /// [normalizeToSouthAfrica]), so the input here is almost always
-  /// already `+27...` — the local-number branch mainly matters if this
-  /// is ever called directly on raw, un-normalized input.
+  /// Ported from `UtilService.validatePhoneNumber`, but tightened for the
+  /// South African kiosk journey: when [isGlobal] is false, the only valid
+  /// format is exactly `+27` followed by the 9-digit subscriber number.
+  /// In global mode, we still allow a generic `+`-prefixed international
+  /// number up to 15 digits.
   static bool validatePhoneNumber(String phoneNumber, bool isGlobal) {
-    final local = RegExp(r'^0\d{9}$');
-    final intl = RegExp(isGlobal ? r'^\+[0-9]{1,15}$' : r'^\+[0-9]{1,12}$');
-    return local.hasMatch(phoneNumber) || intl.hasMatch(phoneNumber);
+    if (isGlobal) {
+      return RegExp(r'^\+[0-9]{1,15}$').hasMatch(phoneNumber);
+    }
+
+    return RegExp(r'^\+27[0-9]{9}$').hasMatch(phoneNumber);
   }
 }

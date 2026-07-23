@@ -63,8 +63,11 @@ class _HelpPageState extends State<HelpPage> with InactivityTimerMixin {
     final phone = MockKioskRepository.normalizeToSouthAfrica(rawPhone);
 
     if (!MockKioskRepository.validatePhoneNumber(phone, _repo.isGlobal)) {
-      InfoDialog.show(context,
-          message: 'Please enter a valid cell phone number.');
+      InfoDialog.show(
+        context,
+        message:
+            'Please enter a valid cell phone number in the format +27XXXXXXXXX.',
+      );
       _autoReturnTimer = Timer(const Duration(seconds: 10), () {
         if (mounted) Navigator.of(context, rootNavigator: true).maybePop();
       });

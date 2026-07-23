@@ -78,8 +78,8 @@ class _DeliverInputPageState extends State<DeliverInputPage>
       return;
     }
     if (!MockKioskRepository.validatePhoneNumber(phone, _repo.isGlobal)) {
-      setState(() =>
-          _errorText = 'Please enter a valid cell phone number and try again.');
+      setState(() => _errorText =
+          'Please enter a valid cell phone number in the format +27XXXXXXXXX.');
       return;
     }
 

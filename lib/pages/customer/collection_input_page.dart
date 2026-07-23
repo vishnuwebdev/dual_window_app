@@ -67,8 +67,8 @@ class _CollectionInputPageState extends State<CollectionInputPage>
     final phone = MockKioskRepository.normalizeToSouthAfrica(rawPhone);
 
     if (!MockKioskRepository.validatePhoneNumber(phone, _repo.isGlobal)) {
-      setState(() =>
-          _errorText = 'Please enter a valid cell phone number and try again.');
+      setState(() => _errorText =
+          'Please enter a valid cell phone number in the format +27XXXXXXXXX.');
       return;
     }
 
