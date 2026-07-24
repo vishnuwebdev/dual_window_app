@@ -132,6 +132,23 @@ class SettingsSyncService {
   /// Worth checking directly against the real `<cvmainConfigDir>/config.json`
   /// content for an SMS-related key before assuming this needs an app-side
   /// change.
+  ///
+  /// `db_entries` type fix (2026-07-24): Android's own code is inconsistent
+  /// between its push and pull of this field. `putSettingsToTheServer`
+  /// (`SettingsService.kt:270`) sends `db_entries` as a **nested JSON
+  /// array** (`JSONArray(dbJson)`) — which is what this file sent before
+  /// this fix, and it didn't show up on the dashboard. But Android's own
+  /// `readDbFromServer`/`readSettingsFromServer` (`SettingsService.kt:82`,
+  /// `:166` reads `template` the same way) read the field back via
+  /// `content.getString("db_entries")` — i.e. `org.json`'s `getString`,
+  /// which throws unless the stored value is a literal JSON string, not an
+  /// object/array. That only makes sense if VaultGroup's backend actually
+  /// stores/returns `db_entries` as a **JSON-encoded string**, not a nested
+  /// type — so this now sends it pre-encoded as a string
+  /// (`jsonEncode(...)`) to match what the backend evidently expects, even
+  /// though that contradicts Android's own push code. UNVERIFIED against a
+  /// real unit — see the class doc comment; revert to the raw list if this
+  /// doesn't fix it either.
   Future<SettingsSyncResult> pushToServer() async {
     final jwt = await _readJwt();
     if (jwt == null) {
@@ -151,11 +168,23 @@ class SettingsSyncService {
       'cvmaster_config': cvmasterConfig,
       'template': cfg.smsTemplate,
       'lockers_sizes': cfg.lockerMapping.map((e) => e.size.toUpperCase()).toList(),
-      'db_entries': MockKioskRepository.instance.cloudDbEntriesJson(),
+      'db_entries': jsonEncode(MockKioskRepository.instance.cloudDbEntriesJson()),
       // Closest local analogue of Android's `admin.json`-backed admin
       // password — this app keeps that as `ConfigService.adminPin`.
       'admin_password': cfg.adminPin,
     });
+
+    // Diagnostic only — this can't be verified against the real dashboard
+    // from a dev machine, so log exactly what's about to go out. On the
+    // real unit, if `template` here is empty/stale despite an admin having
+    // set a real one in the Configuration page, that's an app-side bug
+    // (ConfigService not loading/persisting it); if it's the correct text
+    // and the dashboard still doesn't show it, that rules the app out
+    // entirely and points at the dashboard/backend. Same reasoning for
+    // `db_entries`'s length vs however many parcels are actually on-unit.
+    logger.i('SettingsSyncService.push: template="${cfg.smsTemplate}" '
+        '(${cfg.smsTemplate.length} chars), '
+        'db_entries=${MockKioskRepository.instance.cloudDbEntriesJson().length} item(s)');
 
     try {
       final response = await http
