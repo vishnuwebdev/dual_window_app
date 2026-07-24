@@ -426,54 +426,44 @@ class MockKioskRepository extends ChangeNotifier {
 
   List<LockerItem> getAllItems() => List.unmodifiable(_items);
 
-  /// The current parcel records, translated to Android's exact `Item`
-  /// shape (`phone`/`pin`/`lockerId`/`creationDate` only — see
-  /// `cnc-dnp-android`'s `db/Item.kt`) rather than this app's own richer
-  /// local `db.json` shape (which also carries `collectionLockerId` for
+  /// The current parcel records, translated to the VaultGroup dashboard's
+  /// expected `db_entries` item shape (`cell_number`/`pin`/`override_code`/
+  /// `date_added` only) rather than this app's own richer local `db.json`
+  /// shape (which also carries `lockerId`/`collectionLockerId` for
   /// paired-locker mode, and is what [_itemToJson]/[_itemFromJson] use for
   /// on-disk persistence). Used exclusively by
   /// `SettingsSyncService.pushToServer` to build the `db_entries` field it
-  /// PUTs to the cloud — sending the extra `collectionLockerId` field
-  /// risked the dashboard's parser rejecting or dropping the whole record,
-  /// so this deliberately narrows to the fields VaultGroup already
-  /// understands from the Android app.
+  /// PUTs to the cloud — sending extra fields the dashboard doesn't expect
+  /// risked its parser rejecting or dropping the whole record, so this
+  /// deliberately narrows to just these four.
   ///
-  /// `creationDate` specifically uses [_androidCompatibleDateString] rather
-  /// than `DateTime.toIso8601String()` — found while chasing why
-  /// `db_entries` wasn't showing up on the VaultGroup dashboard even though
-  /// the request otherwise succeeded: Android's `DateSerializer`
-  /// (`cnc-dnp-android`'s `util/DateSerializer.kt`) formats via
-  /// `SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ")`, which always ends in
-  /// an explicit numeric offset like `+0200`. Dart's `toIso8601String()`
-  /// omits any offset entirely for a non-UTC `DateTime` (no `Z`, no
-  /// `+HHmm`) — if VaultGroup's backend validates/parses this field against
-  /// Android's exact format, that mismatch would fail silently on records
-  /// with a local (non-UTC) creation time, which is every record this app
-  /// ever creates (`DateTime.now()` in [addItem]).
+  /// `date_added` is formatted in UTC with a literal `Z` suffix (via
+  /// [_utcDateString]) rather than Android's local-offset
+  /// `+HHMM` format — see [_utcDateString]'s doc comment.
+  ///
+  /// `override_code` duplicates [LockerItem.pin] — there's no separate
+  /// admin-override-code concept on this app's items, so the same PIN used
+  /// for collection is what's sent here.
   List<Map<String, dynamic>> cloudDbEntriesJson() => _items
       .map((item) => {
-            'phone': item.phone,
+            'cell_number': item.phone,
             'pin': item.pin,
-            'lockerId': item.lockerId,
-            'creationDate': _androidCompatibleDateString(item.creationDate),
+            'override_code': item.pin,
+            'date_added': _utcDateString(item.creationDate),
           })
       .toList();
 
-  /// Formats [date] to match Android's `DateSerializer` exactly:
-  /// `SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ")`, e.g.
-  /// `"2026-07-22T14:30:00.000+0200"` — see [cloudDbEntriesJson]'s doc
-  /// comment for why this has to match byte-for-byte rather than using
-  /// Dart's own ISO-8601 formatter.
-  static String _androidCompatibleDateString(DateTime date) {
+  /// Formats [date] in UTC as `yyyy-MM-ddTHH:mm:ss.SSSZ`, e.g.
+  /// `"2026-07-22T12:30:00.000Z"` — converts a local [DateTime] (as
+  /// produced by `DateTime.now()` in [addItem]) to UTC first, since Dart's
+  /// own `toIso8601String()` only appends `Z` for `DateTime`s already in
+  /// UTC.
+  static String _utcDateString(DateTime date) {
     String pad(int n, [int width = 2]) => n.toString().padLeft(width, '0');
-    final offset = date.timeZoneOffset;
-    final sign = offset.isNegative ? '-' : '+';
-    final hours = offset.abs().inHours;
-    final minutes = offset.abs().inMinutes.remainder(60);
-    return '${pad(date.year, 4)}-${pad(date.month)}-${pad(date.day)}'
-        'T${pad(date.hour)}:${pad(date.minute)}:${pad(date.second)}'
-        '.${pad(date.millisecond, 3)}'
-        '$sign${pad(hours)}${pad(minutes)}';
+    final utc = date.toUtc();
+    return '${pad(utc.year, 4)}-${pad(utc.month)}-${pad(utc.day)}'
+        'T${pad(utc.hour)}:${pad(utc.minute)}:${pad(utc.second)}'
+        '.${pad(utc.millisecond, 3)}Z';
   }
 
   /// Normalizes [phone] before comparing — defensive, in case a caller

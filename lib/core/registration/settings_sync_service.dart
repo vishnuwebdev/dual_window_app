@@ -112,14 +112,14 @@ class SettingsSyncService {
   ///    which are uppercase; this app stores sizes lowercase internally
   ///    (`ConfigService.lockerMapping`) but must convert on the way out or
   ///    the dashboard doesn't recognize them.
-  ///  - `db_entries` is sent in Android's exact `Item` shape
-  ///    (`phone`/`pin`/`lockerId`/`creationDate` only) via
+  ///  - `db_entries` is sent in the VaultGroup dashboard's expected shape
+  ///    (`cell_number`/`pin`/`override_code`/`date_added` only) via
   ///    `MockKioskRepository.cloudDbEntriesJson()`, rather than this app's
-  ///    richer local shape (which also carries `collectionLockerId` for
-  ///    paired-locker mode) — an extra field the dashboard doesn't expect
-  ///    risked it silently dropping the whole record. `creationDate` itself
-  ///    is also now formatted to match Android's `DateSerializer` exactly
-  ///    (explicit numeric UTC offset) — see that method's doc comment.
+  ///    richer local shape (which also carries `lockerId`/
+  ///    `collectionLockerId` for paired-locker mode) — an extra field the
+  ///    dashboard doesn't expect risked it silently dropping the whole
+  ///    record. `date_added` is a UTC ISO-8601 timestamp with a literal
+  ///    `Z` suffix — see that method's doc comment.
   ///
   /// STILL UNCONFIRMED — `template` (SMS template) not appearing on the
   /// dashboard: the wire format here matches Android's `putSettingsToTheServer`
