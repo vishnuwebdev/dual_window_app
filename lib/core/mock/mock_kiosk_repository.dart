@@ -426,63 +426,85 @@ class MockKioskRepository extends ChangeNotifier {
 
   List<LockerItem> getAllItems() => List.unmodifiable(_items);
 
-  /// The current parcel records, translated to the VaultGroup dashboard's
-  /// expected `db_entries` item shape rather than this app's own richer
-  /// local `db.json` shape (which also carries `lockerId`/
-  /// `collectionLockerId` for paired-locker mode, and is what
-  /// [_itemToJson]/[_itemFromJson] use for on-disk persistence). Used
-  /// exclusively by `SettingsSyncService.pushToServer` to build the
-  /// `db_entries` field it PUTs to the cloud.
+  /// The current locker state, translated to the VaultGroup dashboard's
+  /// expected `db_entries` shape — confirmed 2026-07-24 against a real
+  /// working unit's stored payload (`change_date` "2026-07-24T11:38:56Z",
+  /// `status: "SYNCED"`). Used exclusively by
+  /// `SettingsSyncService.pushToServer` to build the `db_entries` field it
+  /// PUTs to the cloud.
   ///
-  /// Each entry is wrapped in a `data` key (`{'data': {cell_number, pin,
-  /// override_code, date_added}}`), not the four fields flat on the entry —
-  /// confirmed from the dashboard's own read side (its Angular settings
-  /// form does `content.db_entries.map((item) => item.data)` before
-  /// building each locker-item `FormGroup` from `item.cell_number`/`pin`/
-  /// `override_code`/`date_added`). Sending the fields flat (no `data`
-  /// wrapper) is the gap that was silently dropping every record — the
-  /// dashboard's `.map` would produce a list of `undefined`, so
-  /// `cell_number` reads back empty and `SettingsPage`'s existing
-  /// `if (lockerItem.controls['cell_number'].value !== '')` guard skips the
-  /// row entirely.
+  /// Confirmed shape, in order of how it differs from what this sent
+  /// before:
   ///
-  /// That same dashboard code also calls `.map()` directly on
-  /// `content.db_entries` with no `JSON.parse` first, which only works if
-  /// `db_entries` is a genuine JSON array by the time the dashboard reads
-  /// it back — not a JSON-encoded string. See
-  /// `SettingsSyncService.pushToServer`'s doc comment for why this means
-  /// the field should be sent as a nested array, not `jsonEncode`d into a
-  /// string.
+  ///  - It's **one entry per physical locker door**, positionally aligned
+  ///    with `lockers_sizes` (same length, same order — index `i` here is
+  ///    `lockers_sizes[i]`'s door), not one entry per occupied parcel. An
+  ///    empty unit's `db_entries` is `lockers_sizes.length` entries of
+  ///    `{"size": ..., "data": null}` — the working example had 6 lockers
+  ///    and 6 `db_entries` entries, 2 occupied + 4 `data: null`. Iterating
+  ///    [_items] directly (as this did before) produced a shorter list with
+  ///    no positional meaning at all, which the dashboard couldn't line up
+  ///    against `lockers_sizes` — almost certainly the real reason nothing
+  ///    rendered even after the `data`-wrapper fix.
+  ///  - Each entry also carries the door's own `"size"` (`"small"`/
+  ///    `"medium"`/`"large"`, lowercase — see [ConfigService.lockerMapping]
+  ///    casing note in `SettingsSyncService.pushToServer`'s doc comment).
+  ///  - Occupied doors nest the parcel fields under `"data"`:
+  ///    `{cell_number, pin, override_code, date_added}` — matches
+  ///    `createLockerItem`'s `FormGroup` on the dashboard side. Empty doors
+  ///    send `"data": null`, not an omitted/empty object.
   ///
-  /// `date_added` is formatted in UTC with a literal `Z` suffix (via
-  /// [_utcDateString]) rather than Android's local-offset
-  /// `+HHMM` format — see [_utcDateString]'s doc comment.
+  /// A door is "occupied" if an item's `lockerId` *or* `collectionLockerId`
+  /// matches it — mirrors [isLockerFree]'s definition, so a paired parcel's
+  /// linked drop-off/collection doors both report the same occupant. Only
+  /// verified against unpaired units so far; paired mode is this class's
+  /// best guess, not confirmed against a real paired unit's dashboard view.
   ///
-  /// `override_code` duplicates [LockerItem.pin] — there's no separate
-  /// admin-override-code concept on this app's items, so the same PIN used
-  /// for collection is what's sent here.
-  List<Map<String, dynamic>> cloudDbEntriesJson() => _items
-      .map((item) => {
-            'data': {
-              'cell_number': item.phone,
-              'pin': item.pin,
-              'override_code': item.pin,
-              'date_added': _utcDateString(item.creationDate),
-            },
-          })
-      .toList();
+  /// `date_added` is UTC with a literal `Z` suffix, **no milliseconds**
+  /// (`yyyy-MM-ddTHH:mm:ssZ`) — the working example's timestamps had none;
+  /// see [_utcDateString]'s doc comment.
+  ///
+  /// `override_code` is sent as [LockerItem.pin] for now, but the working
+  /// example's `override_code` values are clearly *not* a copy of `pin`
+  /// (e.g. `pin: "12345"` / `override_code: "6007426955"` — different
+  /// lengths, different values) — this app has no separate
+  /// admin-override-code concept on [LockerItem] to source a real value
+  /// from. Flagged as an open question rather than guessed further; see
+  /// conversation with the app's maintainer.
+  List<Map<String, dynamic>> cloudDbEntriesJson() => _lockers.map((locker) {
+        LockerItem? occupant;
+        for (final item in _items) {
+          if (item.lockerId == locker.id ||
+              item.collectionLockerId == locker.id) {
+            occupant = item;
+            break;
+          }
+        }
+        return {
+          'size': locker.size.name,
+          'data': occupant == null
+              ? null
+              : {
+                  'pin': occupant.pin,
+                  'cell_number': occupant.phone,
+                  'override_code': occupant.pin,
+                  'date_added': _utcDateString(occupant.creationDate),
+                },
+        };
+      }).toList();
 
-  /// Formats [date] in UTC as `yyyy-MM-ddTHH:mm:ss.SSSZ`, e.g.
-  /// `"2026-07-22T12:30:00.000Z"` — converts a local [DateTime] (as
+  /// Formats [date] in UTC as `yyyy-MM-ddTHH:mm:ssZ`, e.g.
+  /// `"2026-07-22T12:30:00Z"` — converts a local [DateTime] (as
   /// produced by `DateTime.now()` in [addItem]) to UTC first, since Dart's
   /// own `toIso8601String()` only appends `Z` for `DateTime`s already in
-  /// UTC.
+  /// UTC. No milliseconds — a real working unit's `db_entries.data.date_added`
+  /// values (confirmed 2026-07-24) had none (`"2026-07-21T13:03:35Z"`), so
+  /// this drops the `.SSS` this used to include.
   static String _utcDateString(DateTime date) {
     String pad(int n, [int width = 2]) => n.toString().padLeft(width, '0');
     final utc = date.toUtc();
     return '${pad(utc.year, 4)}-${pad(utc.month)}-${pad(utc.day)}'
-        'T${pad(utc.hour)}:${pad(utc.minute)}:${pad(utc.second)}'
-        '.${pad(utc.millisecond, 3)}Z';
+        'T${pad(utc.hour)}:${pad(utc.minute)}:${pad(utc.second)}Z';
   }
 
   /// Normalizes [phone] before comparing — defensive, in case a caller
