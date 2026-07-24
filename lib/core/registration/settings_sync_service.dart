@@ -170,7 +170,7 @@ class SettingsSyncService {
     final body = jsonEncode({
       'config': config,
       'cvmaster_config': cvmasterConfig,
-      'sms_template': 'Hello ', //cfg.smsTemplate,
+      'sms_template': cfg.smsTemplate,
       'lockers_sizes':
           cfg.lockerMapping.map((e) => e.size.toUpperCase()).toList(),
       'db_entries':
