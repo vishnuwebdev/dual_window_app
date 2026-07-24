@@ -83,17 +83,20 @@ class SettingsSyncService {
   /// [dir] is blank, the file doesn't exist, or it fails to parse — a
   /// missing/bad native config file should never abort the rest of the
   /// push.
-  Future<Map<String, dynamic>> _readNativeConfig(String dir, String label) async {
+  Future<Map<String, dynamic>> _readNativeConfig(
+      String dir, String label) async {
     if (dir.isEmpty) return const {};
     try {
       final file = File('$dir/config.json');
       if (!await file.exists()) return const {};
       final decoded = jsonDecode(await file.readAsString());
       if (decoded is Map<String, dynamic>) return decoded;
-      logger.w('SettingsSyncService: $label config.json at "$dir" was not a JSON object.');
+      logger.w(
+          'SettingsSyncService: $label config.json at "$dir" was not a JSON object.');
       return const {};
     } catch (e) {
-      logger.w('SettingsSyncService: could not read $label config.json at "$dir": $e');
+      logger.w(
+          'SettingsSyncService: could not read $label config.json at "$dir": $e');
       return const {};
     }
   }
@@ -161,14 +164,17 @@ class SettingsSyncService {
 
     final cfg = ConfigService();
     final config = await _readNativeConfig(cfg.cvmainConfigDir, 'cvmain');
-    final cvmasterConfig = await _readNativeConfig(cfg.cvmasterConfigDir, 'cvmaster');
+    final cvmasterConfig =
+        await _readNativeConfig(cfg.cvmasterConfigDir, 'cvmaster');
 
     final body = jsonEncode({
       'config': config,
       'cvmaster_config': cvmasterConfig,
-      'template': cfg.smsTemplate,
-      'lockers_sizes': cfg.lockerMapping.map((e) => e.size.toUpperCase()).toList(),
-      'db_entries': jsonEncode(MockKioskRepository.instance.cloudDbEntriesJson()),
+      'template': 'Hello ', //cfg.smsTemplate,
+      'lockers_sizes':
+          cfg.lockerMapping.map((e) => e.size.toUpperCase()).toList(),
+      'db_entries':
+          jsonEncode(MockKioskRepository.instance.cloudDbEntriesJson()),
       // Closest local analogue of Android's `admin.json`-backed admin
       // password — this app keeps that as `ConfigService.adminPin`.
       'admin_password': cfg.adminPin,
@@ -219,7 +225,8 @@ class SettingsSyncService {
       );
     } catch (e) {
       logger.w('SettingsSyncService.push failed: $e');
-      return SettingsSyncResult(success: false, message: 'Could not reach VaultGroup: $e');
+      return SettingsSyncResult(
+          success: false, message: 'Could not reach VaultGroup: $e');
     }
   }
 }
