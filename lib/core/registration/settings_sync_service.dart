@@ -113,13 +113,13 @@ class SettingsSyncService {
   ///    (`ConfigService.lockerMapping`) but must convert on the way out or
   ///    the dashboard doesn't recognize them.
   ///  - `db_entries` is sent in the VaultGroup dashboard's expected shape
-  ///    (`cell_number`/`pin`/`override_code`/`date_added` only) via
-  ///    `MockKioskRepository.cloudDbEntriesJson()`, rather than this app's
-  ///    richer local shape (which also carries `lockerId`/
-  ///    `collectionLockerId` for paired-locker mode) — an extra field the
-  ///    dashboard doesn't expect risked it silently dropping the whole
-  ///    record. `date_added` is a UTC ISO-8601 timestamp with a literal
-  ///    `Z` suffix — see that method's doc comment.
+  ///    (each item wrapped as `{'data': {cell_number, pin, override_code,
+  ///    date_added}}`) via `MockKioskRepository.cloudDbEntriesJson()`,
+  ///    rather than this app's richer local shape (which also carries
+  ///    `lockerId`/`collectionLockerId` for paired-locker mode) — an extra
+  ///    field the dashboard doesn't expect risked it silently dropping the
+  ///    whole record. `date_added` is a UTC ISO-8601 timestamp with a
+  ///    literal `Z` suffix — see that method's doc comment.
   ///
   /// STILL UNCONFIRMED — `template` (SMS template) not appearing on the
   /// dashboard: the wire format here matches Android's `putSettingsToTheServer`
@@ -136,22 +136,29 @@ class SettingsSyncService {
   /// content for an SMS-related key before assuming this needs an app-side
   /// change.
   ///
-  /// `db_entries` type fix (2026-07-24): Android's own code is inconsistent
-  /// between its push and pull of this field. `putSettingsToTheServer`
-  /// (`SettingsService.kt:270`) sends `db_entries` as a **nested JSON
-  /// array** (`JSONArray(dbJson)`) — which is what this file sent before
-  /// this fix, and it didn't show up on the dashboard. But Android's own
-  /// `readDbFromServer`/`readSettingsFromServer` (`SettingsService.kt:82`,
-  /// `:166` reads `template` the same way) read the field back via
-  /// `content.getString("db_entries")` — i.e. `org.json`'s `getString`,
-  /// which throws unless the stored value is a literal JSON string, not an
-  /// object/array. That only makes sense if VaultGroup's backend actually
-  /// stores/returns `db_entries` as a **JSON-encoded string**, not a nested
-  /// type — so this now sends it pre-encoded as a string
-  /// (`jsonEncode(...)`) to match what the backend evidently expects, even
-  /// though that contradicts Android's own push code. UNVERIFIED against a
-  /// real unit — see the class doc comment; revert to the raw list if this
-  /// doesn't fix it either.
+  /// `db_entries` shape (2026-07-24, revised): two separate problems were
+  /// conflated here before this revision.
+  ///
+  /// 1. This briefly sent `db_entries` `jsonEncode`d into a string, on the
+  ///    theory that Android's own `readDbFromServer`/`readSettingsFromServer`
+  ///    (`SettingsService.kt:82`/`:166`) read it back via `org.json`'s
+  ///    `content.getString("db_entries")`, which only works on a literal
+  ///    JSON string. That's now reverted: the VaultGroup dashboard's own
+  ///    Angular settings form calls `content.db_entries.map(...)` directly
+  ///    on the field with no `JSON.parse` first, which only works if it's a
+  ///    genuine array by the time it's read back — so this sends it as a
+  ///    nested array again, matching Android's `putSettingsToTheServer`
+  ///    (`SettingsService.kt:270`, `JSONArray(dbJson)`). The Android
+  ///    `getString` pull path may simply be a different endpoint/response
+  ///    shape than what the web dashboard reads, or a pre-existing
+  ///    inconsistency on Android's own side — not evidence about what this
+  ///    app should PUT.
+  /// 2. The real gap: each array element needs to be wrapped as `{'data':
+  ///    {...}}`, not the four fields flat — see
+  ///    `MockKioskRepository.cloudDbEntriesJson()`'s doc comment. Sending
+  ///    flat fields is what was actually silently dropping every record.
+  ///
+  /// Still UNVERIFIED against a real unit/dashboard.
   Future<SettingsSyncResult> pushToServer() async {
     final jwt = await _readJwt();
     if (jwt == null) {
@@ -173,8 +180,7 @@ class SettingsSyncService {
       'sms_template': cfg.smsTemplate,
       'lockers_sizes':
           cfg.lockerMapping.map((e) => e.size.toUpperCase()).toList(),
-      'db_entries':
-          jsonEncode(MockKioskRepository.instance.cloudDbEntriesJson()),
+      'db_entries': MockKioskRepository.instance.cloudDbEntriesJson(),
       // Closest local analogue of Android's `admin.json`-backed admin
       // password — this app keeps that as `ConfigService.adminPin`.
       'admin_password': cfg.adminPin,

@@ -427,15 +427,32 @@ class MockKioskRepository extends ChangeNotifier {
   List<LockerItem> getAllItems() => List.unmodifiable(_items);
 
   /// The current parcel records, translated to the VaultGroup dashboard's
-  /// expected `db_entries` item shape (`cell_number`/`pin`/`override_code`/
-  /// `date_added` only) rather than this app's own richer local `db.json`
-  /// shape (which also carries `lockerId`/`collectionLockerId` for
-  /// paired-locker mode, and is what [_itemToJson]/[_itemFromJson] use for
-  /// on-disk persistence). Used exclusively by
-  /// `SettingsSyncService.pushToServer` to build the `db_entries` field it
-  /// PUTs to the cloud — sending extra fields the dashboard doesn't expect
-  /// risked its parser rejecting or dropping the whole record, so this
-  /// deliberately narrows to just these four.
+  /// expected `db_entries` item shape rather than this app's own richer
+  /// local `db.json` shape (which also carries `lockerId`/
+  /// `collectionLockerId` for paired-locker mode, and is what
+  /// [_itemToJson]/[_itemFromJson] use for on-disk persistence). Used
+  /// exclusively by `SettingsSyncService.pushToServer` to build the
+  /// `db_entries` field it PUTs to the cloud.
+  ///
+  /// Each entry is wrapped in a `data` key (`{'data': {cell_number, pin,
+  /// override_code, date_added}}`), not the four fields flat on the entry —
+  /// confirmed from the dashboard's own read side (its Angular settings
+  /// form does `content.db_entries.map((item) => item.data)` before
+  /// building each locker-item `FormGroup` from `item.cell_number`/`pin`/
+  /// `override_code`/`date_added`). Sending the fields flat (no `data`
+  /// wrapper) is the gap that was silently dropping every record — the
+  /// dashboard's `.map` would produce a list of `undefined`, so
+  /// `cell_number` reads back empty and `SettingsPage`'s existing
+  /// `if (lockerItem.controls['cell_number'].value !== '')` guard skips the
+  /// row entirely.
+  ///
+  /// That same dashboard code also calls `.map()` directly on
+  /// `content.db_entries` with no `JSON.parse` first, which only works if
+  /// `db_entries` is a genuine JSON array by the time the dashboard reads
+  /// it back — not a JSON-encoded string. See
+  /// `SettingsSyncService.pushToServer`'s doc comment for why this means
+  /// the field should be sent as a nested array, not `jsonEncode`d into a
+  /// string.
   ///
   /// `date_added` is formatted in UTC with a literal `Z` suffix (via
   /// [_utcDateString]) rather than Android's local-offset
@@ -446,10 +463,12 @@ class MockKioskRepository extends ChangeNotifier {
   /// for collection is what's sent here.
   List<Map<String, dynamic>> cloudDbEntriesJson() => _items
       .map((item) => {
-            'cell_number': item.phone,
-            'pin': item.pin,
-            'override_code': item.pin,
-            'date_added': _utcDateString(item.creationDate),
+            'data': {
+              'cell_number': item.phone,
+              'pin': item.pin,
+              'override_code': item.pin,
+              'date_added': _utcDateString(item.creationDate),
+            },
           })
       .toList();
 
