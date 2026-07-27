@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/config/config_service.dart';
@@ -5,6 +7,8 @@ import '../../core/registration/unit_registration_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../widgets/admin_section_card.dart';
 import '../../widgets/keyboard_text_field.dart';
+import '../../widgets/kiosk/inactivity_timer.dart';
+import '../../widgets/kiosk/info_dialog.dart' show kDialogAutoCloseDuration;
 
 /// Admin window — Unit Registration page.
 ///
@@ -36,7 +40,19 @@ class UnitRegistrationPage extends StatefulWidget {
   State<UnitRegistrationPage> createState() => _UnitRegistrationPageState();
 }
 
-class _UnitRegistrationPageState extends State<UnitRegistrationPage> {
+class _UnitRegistrationPageState extends State<UnitRegistrationPage>
+    with InactivityTimerMixin {
+  // This page had no idle timeout at all before (2026-07-25 — see the
+  // admin-section inactivity-timer audit) — it's reached from
+  // AdminMenuPage like every other admin screen, so it gets the same
+  // treatment: 5 minutes idle (kAdminInactivityTimeout), then pop back to
+  // AdminMenuPage.
+  @override
+  Duration get inactivityTimeout => kAdminInactivityTimeout;
+
+  @override
+  void onInactivityTimeout() => Navigator.of(context).pop();
+
   final _codeController = TextEditingController();
   final _service = UnitRegistrationService.instance;
   final _config = ConfigService();
@@ -54,6 +70,7 @@ class _UnitRegistrationPageState extends State<UnitRegistrationPage> {
   @override
   void initState() {
     super.initState();
+    startInactivityTimer();
     _cvmainDirController = TextEditingController(text: _config.cvmainConfigDir);
     _cvmasterDirController = TextEditingController(text: _config.cvmasterConfigDir);
   }
@@ -148,36 +165,14 @@ class _UnitRegistrationPageState extends State<UnitRegistrationPage> {
 
   /// Confirms before doing anything — unlike "Mirror now"/"Forget", this
   /// overwrites the physical unit's real `auth.json`/`mq.json` with the
-  /// "-reset" template files, which can't be undone from this app.
+  /// "-reset" template files, which can't be undone from this app. Uses
+  /// [_ResetConfirmDialog] (below) rather than a bare `AlertDialog` so this
+  /// gets the same "X" close button + auto-dismiss every other admin
+  /// dialog has — see that widget's doc comment.
   Future<void> _resetToFactoryDefaults() async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppColors.adminCard,
-        title: const Text(
-          'Reset unit registration?',
-          style: TextStyle(fontFamily: 'Metropolis', fontWeight: FontWeight.w700, color: Colors.white),
-        ),
-        content: const Text(
-          'This clears this app\'s local registration and overwrites the '
-          'physical unit\'s auth.json and mq/mq.json with its factory '
-          '"-reset" template files, in the cvmain config directory below. '
-          'cvmain will still need a manual restart to pick it up. This '
-          'cannot be undone from here.',
-          style: TextStyle(fontFamily: 'Metropolis', color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            style: TextButton.styleFrom(foregroundColor: Colors.redAccent[100]),
-            child: const Text('Reset'),
-          ),
-        ],
-      ),
+      builder: (dialogContext) => const _ResetConfirmDialog(),
     );
     if (confirmed != true) return;
 
@@ -193,7 +188,7 @@ class _UnitRegistrationPageState extends State<UnitRegistrationPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return wrapWithActivityDetector(Scaffold(
       backgroundColor: AppColors.navy,
       appBar: AppBar(
         backgroundColor: AppColors.navy,
@@ -489,6 +484,93 @@ class _UnitRegistrationPageState extends State<UnitRegistrationPage> {
           ],
         ),
       ),
+    ));
+  }
+}
+
+/// The "Reset unit registration?" confirmation — a destructive,
+/// unrecoverable action (see `_resetToFactoryDefaults`'s doc comment), so
+/// this isn't an [InfoDialog] (that's for one-button informational
+/// toasts), but it gets the same two admin-dialog guarantees:
+///
+///  - An explicit "X" close button, top-right of the title, so it's never
+///    the only way out is picking one of the two actions — tapping it (or
+///    letting it auto-close) is equivalent to Cancel.
+///  - Auto-dismiss after [kDialogAutoCloseDuration] on an unattended
+///    kiosk. Unlike [InfoDialog] (which just closes), this *always*
+///    resolves to `false`/Cancel on timeout, never `true` — a confirm
+///    dialog for a destructive action must never time out into "yes".
+class _ResetConfirmDialog extends StatefulWidget {
+  const _ResetConfirmDialog();
+
+  @override
+  State<_ResetConfirmDialog> createState() => _ResetConfirmDialogState();
+}
+
+class _ResetConfirmDialogState extends State<_ResetConfirmDialog> {
+  Timer? _autoCloseTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _autoCloseTimer = Timer(kDialogAutoCloseDuration, _close);
+  }
+
+  @override
+  void dispose() {
+    _autoCloseTimer?.cancel();
+    super.dispose();
+  }
+
+  void _close([bool result = false]) {
+    if (!mounted) return;
+    Navigator.of(context).pop(result);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: AppColors.adminCard,
+      title: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Expanded(
+            child: Text(
+              'Reset unit registration?',
+              style: TextStyle(
+                  fontFamily: 'Metropolis',
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, color: Colors.white70, size: 20),
+            tooltip: 'Close',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            onPressed: () => _close(),
+          ),
+        ],
+      ),
+      content: const Text(
+        'This clears this app\'s local registration and overwrites the '
+        'physical unit\'s auth.json and mq/mq.json with its factory '
+        '"-reset" template files, in the cvmain config directory below. '
+        'cvmain will still need a manual restart to pick it up. This '
+        'cannot be undone from here.',
+        style: TextStyle(fontFamily: 'Metropolis', color: Colors.white70),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => _close(),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () => _close(true),
+          style: TextButton.styleFrom(foregroundColor: Colors.redAccent[100]),
+          child: const Text('Reset'),
+        ),
+      ],
     );
   }
 }

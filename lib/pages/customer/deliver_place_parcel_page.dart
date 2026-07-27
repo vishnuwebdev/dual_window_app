@@ -21,8 +21,7 @@ import 'deliver_dropoff_complete_page.dart';
 /// back button go straight to `MainActivity`, never to
 /// `DeliverDropoffCompleteActivity` (which has no caller anywhere in the
 /// app — see the screen inventory). Here they go to the Dropoff Complete
-/// screen instead, so that screen has a reachable place in the flow. See
-/// the same note in `privacy_statement_page.dart`.
+/// screen instead, so that screen has a reachable place in the flow.
 class DeliverPlaceParcelPage extends StatefulWidget {
   const DeliverPlaceParcelPage({super.key, required this.phone, required this.size});
 

@@ -9,8 +9,8 @@ import '../../core/utilities/app_version.dart';
 import '../../widgets/kiosk/kiosk.dart';
 import '../admin/admin_pin_gate_page.dart';
 import 'collection_input_page.dart';
+import 'deliver_input_page.dart';
 import 'help_page.dart';
-import 'privacy_statement_page.dart';
 import 'verify_pin_page.dart';
 
 /// Customer/Admin window — Home ("Welcome") page.
@@ -114,8 +114,12 @@ class _HomePageState extends State<HomePage> {
         MaterialPageRoute(builder: (_) => const VerifyPinPage()),
       );
     } else {
+      // Straight to phone-number entry — no Privacy Statement or
+      // Disclaimer screen in between (removed 2026-07-25; see git history
+      // for the old `PrivacyStatementPage`/`DeliverDisclaimerPage` if this
+      // ever needs to come back).
       Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const PrivacyStatementPage()),
+        MaterialPageRoute(builder: (_) => const DeliverInputPage()),
       );
     }
   }

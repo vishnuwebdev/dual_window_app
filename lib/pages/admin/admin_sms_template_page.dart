@@ -16,6 +16,12 @@ class AdminSmsTemplatePage extends StatefulWidget {
 
 class _AdminSmsTemplatePageState extends State<AdminSmsTemplatePage>
     with InactivityTimerMixin {
+  // Longer than the 30s kiosk default — see kAdminInactivityTimeout's doc
+  // comment. Timing out here pops back to AdminMenuPage (the admin
+  // landing screen), same as every other admin feature screen.
+  @override
+  Duration get inactivityTimeout => kAdminInactivityTimeout;
+
   final _config = ConfigService();
   late final _templateController =
       TextEditingController(text: _config.smsTemplate);
@@ -49,6 +55,7 @@ class _AdminSmsTemplatePageState extends State<AdminSmsTemplatePage>
     InfoDialog.show(
       context,
       message: 'THE SMS TEMPLATE HAS BEEN SUCCESSFULLY UPDATED',
+      autoCloseDuration: kDialogAutoCloseDuration,
       onClose: () => Navigator.of(context).pop(),
     );
   }

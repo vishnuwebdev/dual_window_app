@@ -26,6 +26,9 @@ class KioskTextField extends StatefulWidget {
     this.onSubmitted,
     this.onChanged,
     this.maxLines = 1,
+    this.useVirtualKeyboard = true,
+    this.onTap,
+    this.active = false,
   });
 
   final TextEditingController controller;
@@ -40,6 +43,22 @@ class KioskTextField extends StatefulWidget {
   /// centering it, and switches to a less pill-shaped corner radius so a
   /// tall box doesn't look like a stretched capsule.
   final int maxLines;
+
+  /// Forwarded to [KeyboardTextField.useVirtualKeyboard] — set `false` when
+  /// this field is driven by a dedicated on-screen control (e.g. a shared
+  /// `NumericKeypad` on a PIN-entry page) instead of the popup QWERTY
+  /// keyboard.
+  final bool useVirtualKeyboard;
+
+  /// Forwarded to [KeyboardTextField.onTap].
+  final VoidCallback? onTap;
+
+  /// Highlights the field's shadow frame in teal instead of the usual navy
+  /// — used by multi-field PIN pages (Pin Reset, Admin Reset, Admin
+  /// Dropoff Pin) to show which field a shared `NumericKeypad`'s digits are
+  /// currently going into, since those fields opt out of normal focus-based
+  /// on-screen-keyboard targeting via [useVirtualKeyboard].
+  final bool active;
 
   @override
   State<KioskTextField> createState() => _KioskTextFieldState();
@@ -78,10 +97,11 @@ class _KioskTextFieldState extends State<KioskTextField> {
     final innerRadius = isTextarea ? 12.0 : 24.0;
     final fieldHeight = isTextarea ? 22.0 * widget.maxLines + 24 : 46.0;
 
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 150),
       padding: EdgeInsets.only(top: isTextarea ? 4 : 6, left: 8, right: 4, bottom: isTextarea ? 4 : 0),
       decoration: BoxDecoration(
-        color: AppColors.fieldShadow,
+        color: widget.active ? AppColors.teal : AppColors.fieldShadow,
         borderRadius: BorderRadius.circular(outerRadius),
       ),
       child: SizedBox(
@@ -100,6 +120,8 @@ class _KioskTextFieldState extends State<KioskTextField> {
               maxLines: widget.maxLines,
               minLines: isTextarea ? widget.maxLines : null,
               style: AppTextStyles.fieldInput,
+              useVirtualKeyboard: widget.useVirtualKeyboard,
+              onTap: widget.onTap,
               decoration: InputDecoration(
                 border: InputBorder.none,
                 isCollapsed: true,

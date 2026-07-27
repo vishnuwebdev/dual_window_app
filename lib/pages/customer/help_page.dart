@@ -23,6 +23,18 @@ class _HelpPageState extends State<HelpPage> with InactivityTimerMixin {
   final _repo = MockKioskRepository.instance;
   Timer? _autoReturnTimer;
 
+  /// Digits only — see `DeliverInputPage._appendDigit`'s doc comment for
+  /// why the phone field doesn't need a `+` key despite appearances.
+  void _appendDigit(String digit) {
+    setState(() => _phoneController.text += digit);
+  }
+
+  void _backspace() {
+    final text = _phoneController.text;
+    if (text.isEmpty) return;
+    setState(() => _phoneController.text = text.substring(0, text.length - 1));
+  }
+
   @override
   void initState() {
     super.initState();
@@ -130,26 +142,33 @@ class _HelpPageState extends State<HelpPage> with InactivityTimerMixin {
                 const SizedBox(height: 20),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     SizedBox(
-                      width: 340,
+                      width: 300,
                       child: KioskTextField(
                         controller: _phoneController,
                         hintText: '0821234567',
                         maxLength: 15,
+                        useVirtualKeyboard: false,
                       ),
                     ),
-                    const SizedBox(width: 16),
-                    KioskButton(
-                      label: 'Confirm',
-                      onPressed: _handleConfirm,
-                      width: 150,
-                      textStyle:
-                          AppTextStyles.buttonLabel.copyWith(fontSize: 20),
+                    const SizedBox(width: 32),
+                    NumericKeypad(
+                      onDigit: _appendDigit,
+                      onBackspace: _backspace,
+                      onEnter: _handleConfirm,
                     ),
                   ],
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 24),
+                KioskButton(
+                  label: 'Confirm',
+                  onPressed: _handleConfirm,
+                  width: 220,
+                  textStyle: AppTextStyles.buttonLabel.copyWith(fontSize: 20),
+                ),
+                const SizedBox(height: 24),
                 Text(
                   'For any other queries,\nplease contact our support team\non 0870 57 55 55',
                   textAlign: TextAlign.center,

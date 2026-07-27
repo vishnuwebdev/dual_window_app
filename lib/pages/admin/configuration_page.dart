@@ -6,6 +6,7 @@ import '../../core/mock/mock_kiosk_repository.dart';
 import '../../core/theme/app_colors.dart';
 import '../../widgets/admin_section_card.dart';
 import '../../widgets/keyboard_text_field.dart';
+import '../../widgets/kiosk/inactivity_timer.dart';
 
 /// Admin window — Configuration page.
 ///
@@ -45,7 +46,20 @@ class _PendingLockerPair {
   final int collectionId;
 }
 
-class _ConfigurationPageState extends State<ConfigurationPage> {
+class _ConfigurationPageState extends State<ConfigurationPage>
+    with InactivityTimerMixin {
+  // This page had no idle timeout at all before (2026-07-25 — see the
+  // admin-section inactivity-timer audit) — it's reached from
+  // AdminMenuPage like every other admin screen, so it gets the same
+  // treatment: 5 minutes idle (kAdminInactivityTimeout — longer than the
+  // 30s kiosk default, since this page involves reading/typing/
+  // deliberating), then pop back to AdminMenuPage.
+  @override
+  Duration get inactivityTimeout => kAdminInactivityTimeout;
+
+  @override
+  void onInactivityTimeout() => Navigator.of(context).pop();
+
   late final TextEditingController _addressController;
   late final TextEditingController _lockerMappingController;
   final _config = ConfigService();
@@ -75,6 +89,7 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
   @override
   void initState() {
     super.initState();
+    startInactivityTimer();
     _addressController = TextEditingController(text: _config.lockerAddress);
     // Shown as the comma-separated size shorthand (e.g.
     // "small,small,medium,large") — see `ConfigService.lockerMappingText`.
@@ -291,7 +306,7 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
     final unmapped = totalLockers - usedIds.length;
     final isPairingComplete = unmapped <= maxUnmapped;
 
-    return Scaffold(
+    return wrapWithActivityDetector(Scaffold(
       backgroundColor: AppColors.navy,
       appBar: AppBar(
         backgroundColor: AppColors.navy,
@@ -750,6 +765,6 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
           ],
         ),
       ),
-    );
+    ));
   }
 }

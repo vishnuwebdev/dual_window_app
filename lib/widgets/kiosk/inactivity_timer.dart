@@ -2,6 +2,18 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+/// Idle timeout used by every screen under `lib/pages/admin/` (once
+/// authenticated past the PIN gate) — longer than the 30s kiosk-wide
+/// default (see [InactivityTimerMixin.inactivityTimeout]) because admin
+/// screens involve reading, typing, and deliberating (editing a locker
+/// mapping, composing an SMS template, confirming a factory reset), not
+/// the quick tap-and-go interactions the 30s default is tuned for.
+/// `AdminPinGatePage` deliberately does *not* use this — it's a PIN entry
+/// screen sitting exposed on the public customer kiosk before any
+/// authentication has happened, so it keeps the stricter 30s default
+/// rather than leaving an unlocked-looking prompt open for 5 minutes.
+const kAdminInactivityTimeout = Duration(minutes: 5);
+
 /// Recreates the inactivity-timeout pattern found on almost every Android
 /// activity in the kiosk app: a `Handler.postDelayed` timer that fires
 /// after ~30 seconds of no touch input and navigates back to the Home

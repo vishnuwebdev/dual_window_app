@@ -3,6 +3,7 @@
 library;
 
 export 'back_image_button.dart';
+export 'bouncy_tap.dart';
 export 'error_banner.dart';
 export 'inactivity_timer.dart';
 export 'info_dialog.dart';

@@ -22,12 +22,30 @@ class KeyboardTextField extends StatefulWidget {
     this.obscureText = false,
     this.maxLines = 1,
     this.minLines,
+    this.useVirtualKeyboard = true,
+    this.onTap,
   });
 
   final TextEditingController controller;
   final InputDecoration? decoration;
   final ValueChanged<String>? onSubmitted;
   final TextStyle? style;
+
+  /// Set `false` for fields driven by their own dedicated on-screen control
+  /// instead of the shared popup `CustomKeyboard` — e.g. `KioskTextField`s
+  /// wired to a `NumericKeypad` (see the PIN-entry pages under
+  /// `lib/pages/`). Focusing the field then does *not* call
+  /// `VirtualKeyboardController.attach`, so `KeyboardHost` never pops the
+  /// QWERTY keyboard up over it. A physical/hardware keyboard still works
+  /// normally either way — this only affects the on-screen popup.
+  final bool useVirtualKeyboard;
+
+  /// Forwarded to the underlying `TextField`'s `onTap` — fires on every tap
+  /// regardless of [useVirtualKeyboard], so callers can use it to track
+  /// "which field did the user just tap" (e.g. to route a shared
+  /// `NumericKeypad`'s digits to the right controller) without needing to
+  /// stand up their own `FocusNode` per field.
+  final VoidCallback? onTap;
 
   /// Masks input as dots — used for PIN/password fields (Verify PIN, PIN
   /// Reset, Admin Login, Admin Reset). Defaults to `false` so plain-text
@@ -69,6 +87,7 @@ class _KeyboardTextFieldState extends State<KeyboardTextField> {
 
   void _handleFocusChange() {
     if (_focusNode.hasFocus) {
+      if (!widget.useVirtualKeyboard) return;
       VirtualKeyboardController.instance.attach(
         owner: this,
         onCharacter: _insert,
@@ -142,6 +161,7 @@ class _KeyboardTextFieldState extends State<KeyboardTextField> {
       // KeyboardHost) is purely additive, and hardware-keyboard typing
       // keeps working normally too.
       onSubmitted: widget.onSubmitted,
+      onTap: widget.onTap,
     );
   }
 }

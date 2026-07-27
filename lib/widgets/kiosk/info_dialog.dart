@@ -5,6 +5,14 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 
+/// Default `autoCloseDuration` for every admin-section [InfoDialog] — so a
+/// confirmation toast (SMS template updated, PIN reset, etc.) never sits
+/// open indefinitely on an unattended kiosk, while still giving an admin
+/// long enough to actually read it before it disappears on its own. The
+/// "X" button (always present, see [InfoDialog]'s doc comment) already
+/// lets anyone dismiss it sooner.
+const kDialogAutoCloseDuration = Duration(seconds: 15);
+
 /// Recreates `select_locker_dialog.xml`: a white, thick-navy-bordered
 /// message box with a blue circular "X" close button pinned to its top
 /// right corner, floating over a solid blue drop-shadow panel. Used for

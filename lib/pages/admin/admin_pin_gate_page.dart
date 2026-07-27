@@ -79,6 +79,7 @@ class _AdminPinGatePageState extends State<AdminPinGatePage>
                             controller: _pinController,
                             maxLength: 10,
                             obscureText: true,
+                            useVirtualKeyboard: false,
                             onChanged: (_) => setState(() => _errorText = null),
                           ),
                           if (_errorText != null)

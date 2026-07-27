@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../core/theme/app_colors.dart';
+
 /// How the shift key currently affects letter keys.
 ///
 /// [off] → lowercase. [single] → the *next* letter typed comes out
@@ -22,6 +24,19 @@ enum _ShiftMode { off, single, locked }
 /// [KeyboardTextField] is the ready-made way to wire this up to a normal
 /// `TextField`; use it when that's all you need. Reach for `CustomKeyboard`
 /// directly when you want the keys but need custom behavior around them.
+///
+/// Deliberately light-themed with fixed colors (white keys, a light grey
+/// panel), not `Theme.of(context).colorScheme` (2026-07-25, changed) — this
+/// keyboard is mounted once per window via `KeyboardHost`, and the Customer
+/// window's `MaterialApp` sets `brightness: Brightness.dark` (see
+/// `customer_window.dart`), so `colorScheme.surface`/`surfaceContainerHighest`
+/// resolved to dark navy there while the Admin window (no explicit
+/// `brightness`, so Material 3's default light) rendered the same keyboard
+/// light — the same widget looked like two different keyboards depending on
+/// which window it popped up in, and either way clashed with
+/// `KioskTextField`'s always-white input pills it's typing into. Fixed
+/// colors sidestep that: this keyboard now looks identical on both windows,
+/// matching the fields around it.
 class CustomKeyboard extends StatefulWidget {
   const CustomKeyboard({
     super.key,
@@ -109,11 +124,10 @@ class _CustomKeyboardState extends State<CustomKeyboard> {
   Widget build(BuildContext context) {
     final rows = _numeric ? _symbolRows : _letterRows;
     final letters = !_numeric;
-    final scheme = Theme.of(context).colorScheme;
 
     return Material(
       elevation: 8,
-      color: scheme.surfaceContainerHighest,
+      color: const Color(0xFFE7EAF0),
       child: SafeArea(
         top: false,
         child: Padding(
@@ -213,7 +227,7 @@ class _KeyState extends State<_Key> {
 
   @override
   Widget build(BuildContext context) {
-    final base = Theme.of(context).colorScheme.surface;
+    const base = Colors.white;
     final bg = _pressed ? Color.alphaBlend(Colors.black12, base) : base;
 
     return Padding(
@@ -232,8 +246,11 @@ class _KeyState extends State<_Key> {
               borderRadius: BorderRadius.circular(6),
             ),
             child: Center(
-                child:
-                    Text(widget.label, style: const TextStyle(fontSize: 16))),
+              child: Text(
+                widget.label,
+                style: const TextStyle(fontSize: 16, color: AppColors.navy),
+              ),
+            ),
           ),
         ),
       ),
@@ -274,14 +291,13 @@ class _ControlKeyState extends State<_ControlKey> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final base = widget.filled
-        ? scheme.primary
+        ? AppColors.teal
         : widget.selected
-            ? scheme.primaryContainer
-            : scheme.surface;
+            ? AppColors.teal.withOpacity(0.18)
+            : Colors.white;
     final bg = _pressed ? Color.alphaBlend(Colors.black12, base) : base;
-    final fg = widget.filled ? scheme.onPrimary : scheme.onSurface;
+    final fg = widget.filled ? Colors.white : AppColors.navy;
 
     return Padding(
       padding: const EdgeInsets.all(2),

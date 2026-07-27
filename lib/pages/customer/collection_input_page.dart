@@ -22,6 +22,47 @@ class _CollectionInputPageState extends State<CollectionInputPage>
 
   String? _errorText;
 
+  /// Which field the shared `NumericKeypad` is currently typing into — see
+  /// `PinResetPage._activeController`'s doc comment for the pattern this
+  /// follows. `null` means "the phone field" (see [_activeField]).
+  TextEditingController? _activeController;
+
+  List<TextEditingController> get _orderedFields =>
+      [_phoneController, _pinController];
+
+  TextEditingController get _activeField =>
+      _activeController ?? _orderedFields.first;
+
+  /// Digits only — see `DeliverInputPage._appendDigit`'s doc comment for
+  /// why the phone field doesn't need a `+` key despite appearances.
+  void _appendDigit(String digit) {
+    setState(() {
+      _errorText = null;
+      _activeField.text += digit;
+    });
+  }
+
+  void _backspace() {
+    final field = _activeField;
+    if (field.text.isEmpty) return;
+    setState(() {
+      _errorText = null;
+      field.text = field.text.substring(0, field.text.length - 1);
+    });
+  }
+
+  /// "Enter" moves from the phone field to the OTP field, then submits —
+  /// mirrors the PIN pages' `_advanceOrSubmit`.
+  void _advanceOrSubmit() {
+    final fields = _orderedFields;
+    final index = fields.indexOf(_activeField);
+    if (index < fields.length - 1) {
+      setState(() => _activeController = fields[index + 1]);
+    } else {
+      _handleContinue();
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -112,41 +153,65 @@ class _CollectionInputPageState extends State<CollectionInputPage>
             const SizedBox(height: 24),
             Expanded(
               child: Center(
-                child: SizedBox(
-                  width: 520,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Enter cell phone number:',
-                          style: AppTextStyles.label),
-                      const SizedBox(height: 4),
-                      if (!_repo.isGlobal)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Text(
-                            '(Use +27XXXXXXXXX for South Africa)',
-                            style: AppTextStyles.hint,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 420,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Enter cell phone number:',
+                              style: AppTextStyles.label),
+                          const SizedBox(height: 4),
+                          if (!_repo.isGlobal)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Text(
+                                '(Use +27XXXXXXXXX for South Africa)',
+                                style: AppTextStyles.hint,
+                              ),
+                            ),
+                          KioskTextField(
+                            controller: _phoneController,
+                            hintText: '0821234567',
+                            maxLength: 15,
+                            useVirtualKeyboard: false,
+                            active: _activeField == _phoneController,
+                            onTap: () => setState(
+                                () => _activeController = _phoneController),
+                            onChanged: (_) =>
+                                setState(() => _errorText = null),
                           ),
-                        ),
-                      KioskTextField(
-                        controller: _phoneController,
-                        hintText: '0821234567',
-                        maxLength: 15,
-                        onChanged: (_) => setState(() => _errorText = null),
+                          const SizedBox(height: 24),
+                          Text('Enter one-time pin:',
+                              style: AppTextStyles.label),
+                          const SizedBox(height: 12),
+                          KioskTextField(
+                            controller: _pinController,
+                            hintText: '0000',
+                            maxLength: 4,
+                            useVirtualKeyboard: false,
+                            active: _activeField == _pinController,
+                            onTap: () => setState(
+                                () => _activeController = _pinController),
+                            onChanged: (_) =>
+                                setState(() => _errorText = null),
+                          ),
+                          if (_errorText != null)
+                            ErrorBanner(message: _errorText!),
+                        ],
                       ),
-                      const SizedBox(height: 24),
-                      Text('Enter one-time pin:', style: AppTextStyles.label),
-                      const SizedBox(height: 12),
-                      KioskTextField(
-                        controller: _pinController,
-                        hintText: '0000',
-                        maxLength: 4,
-                        onChanged: (_) => setState(() => _errorText = null),
-                      ),
-                      if (_errorText != null) ErrorBanner(message: _errorText!),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(width: 40),
+                    NumericKeypad(
+                      onDigit: _appendDigit,
+                      onBackspace: _backspace,
+                      onEnter: _advanceOrSubmit,
+                    ),
+                  ],
                 ),
               ),
             ),

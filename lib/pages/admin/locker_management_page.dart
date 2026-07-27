@@ -45,6 +45,12 @@ class LockerManagementPage extends StatefulWidget {
 
 class _LockerManagementPageState extends State<LockerManagementPage>
     with InactivityTimerMixin {
+  // Longer than the 30s kiosk default — see kAdminInactivityTimeout's doc
+  // comment. Timing out here pops back to AdminMenuPage (the admin
+  // landing screen), same as every other admin feature screen.
+  @override
+  Duration get inactivityTimeout => kAdminInactivityTimeout;
+
   final _repo = MockKioskRepository.instance;
   final Set<int> _selectedLockerIds = {};
 
@@ -57,7 +63,7 @@ class _LockerManagementPageState extends State<LockerManagementPage>
   void initState() {
     super.initState();
     _repo.addListener(_onRepoChanged);
-    // Same 30s idle-timeout pattern as every other admin screen (see
+    // Same idle-timeout pattern as every other admin screen (see
     // `InactivityTimerMixin`) — this screen was missing it, so it used to
     // stay open indefinitely with no one watching it.
     startInactivityTimer();

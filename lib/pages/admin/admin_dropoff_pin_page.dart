@@ -17,11 +17,59 @@ class AdminDropoffPinPage extends StatefulWidget {
 
 class _AdminDropoffPinPageState extends State<AdminDropoffPinPage>
     with InactivityTimerMixin {
+  // Longer than the 30s kiosk default — see kAdminInactivityTimeout's doc
+  // comment. Timing out here pops back to AdminMenuPage (the admin
+  // landing screen), same as every other admin feature screen.
+  @override
+  Duration get inactivityTimeout => kAdminInactivityTimeout;
+
   final _currentController = TextEditingController();
   final _newController = TextEditingController();
   final _confirmController = TextEditingController();
   final _config = ConfigService();
   String? _errorText;
+
+  /// Which field the shared `NumericKeypad` is currently typing into — see
+  /// `PinResetPage._activeController`'s doc comment (same pattern; this
+  /// page has the same first-time-setup shape).
+  TextEditingController? _activeController;
+
+  List<TextEditingController> get _orderedFields => [
+        if (!_isFirstTimeSetup) _currentController,
+        _newController,
+        _confirmController,
+      ];
+
+  TextEditingController get _activeField =>
+      _activeController ?? _orderedFields.first;
+
+  void _appendDigit(String digit) {
+    setState(() {
+      _errorText = null;
+      _activeField.text += digit;
+    });
+  }
+
+  void _backspace() {
+    final field = _activeField;
+    if (field.text.isEmpty) return;
+    setState(() {
+      _errorText = null;
+      field.text = field.text.substring(0, field.text.length - 1);
+    });
+  }
+
+  /// "Enter" advances to the next PIN field instead of submitting
+  /// immediately — see `PinResetPage._advanceOrSubmit`'s doc comment.
+  void _advanceOrSubmit() {
+    final fields = _orderedFields;
+    final index = fields.indexOf(_activeField);
+    if (index < fields.length - 1) {
+      setState(() => _activeController = fields[index + 1]);
+    } else {
+      _handleContinue();
+    }
+  }
 
   @override
   void initState() {
@@ -81,6 +129,7 @@ class _AdminDropoffPinPageState extends State<AdminDropoffPinPage>
     InfoDialog.show(
       context,
       message: 'THE DROPOFF PIN HAS BEEN SUCCESSFULLY RESET',
+      autoCloseDuration: kDialogAutoCloseDuration,
       onClose: () => Navigator.of(context).pop(),
     );
   }
@@ -95,43 +144,72 @@ class _AdminDropoffPinPageState extends State<AdminDropoffPinPage>
             const KioskHeader(),
             Expanded(
               child: Center(
-                child: SizedBox(
-                  width: 480,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (!_isFirstTimeSetup) ...[
-                        Text('Current dropoff pin:',
-                            style: AppTextStyles.label),
-                        const SizedBox(height: 8),
-                        KioskTextField(
-                            controller: _currentController,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 380,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (!_isFirstTimeSetup) ...[
+                            const Text('Current dropoff pin:',
+                                style: AppTextStyles.label),
+                            const SizedBox(height: 8),
+                            KioskTextField(
+                              controller: _currentController,
+                              maxLength: 6,
+                              obscureText: true,
+                              useVirtualKeyboard: false,
+                              active: _activeField == _currentController,
+                              onTap: () => setState(
+                                  () => _activeController = _currentController),
+                              onChanged: (_) =>
+                                  _filterDigits(_currentController),
+                            ),
+                            const SizedBox(height: 20),
+                          ],
+                          const Text('New dropoff pin:',
+                              style: AppTextStyles.label),
+                          const SizedBox(height: 8),
+                          KioskTextField(
+                            controller: _newController,
                             maxLength: 6,
                             obscureText: true,
-                            onChanged: (_) =>
-                                _filterDigits(_currentController)),
-                        const SizedBox(height: 20),
-                      ],
-                      Text('New dropoff pin:', style: AppTextStyles.label),
-                      const SizedBox(height: 8),
-                      KioskTextField(
-                          controller: _newController,
-                          maxLength: 6,
-                          obscureText: true,
-                          onChanged: (_) => _filterDigits(_newController)),
-                      const SizedBox(height: 20),
-                      Text('Confirm new dropoff pin:',
-                          style: AppTextStyles.label),
-                      const SizedBox(height: 8),
-                      KioskTextField(
-                          controller: _confirmController,
-                          maxLength: 6,
-                          obscureText: true,
-                          onChanged: (_) => _filterDigits(_confirmController)),
-                      if (_errorText != null) ErrorBanner(message: _errorText!),
-                    ],
-                  ),
+                            useVirtualKeyboard: false,
+                            active: _activeField == _newController,
+                            onTap: () => setState(
+                                () => _activeController = _newController),
+                            onChanged: (_) => _filterDigits(_newController),
+                          ),
+                          const SizedBox(height: 20),
+                          const Text('Confirm new dropoff pin:',
+                              style: AppTextStyles.label),
+                          const SizedBox(height: 8),
+                          KioskTextField(
+                            controller: _confirmController,
+                            maxLength: 6,
+                            obscureText: true,
+                            useVirtualKeyboard: false,
+                            active: _activeField == _confirmController,
+                            onTap: () => setState(
+                                () => _activeController = _confirmController),
+                            onChanged: (_) => _filterDigits(_confirmController),
+                          ),
+                          if (_errorText != null)
+                            ErrorBanner(message: _errorText!),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 48),
+                    NumericKeypad(
+                      onDigit: _appendDigit,
+                      onBackspace: _backspace,
+                      onEnter: _advanceOrSubmit,
+                    ),
+                  ],
                 ),
               ),
             ),
