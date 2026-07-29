@@ -105,6 +105,15 @@ class MockKioskRepository extends ChangeNotifier {
   /// to label Locker Management rows. Only populated in paired mode.
   final Set<int> _collectionRoleLockerIds = {};
 
+  /// Both physical door ids of a pair -> that pair's admin-assigned
+  /// `LockerPairMapping.customLockerId`, when one was set — read straight
+  /// from `ConfigService.lockerPairMappings` in
+  /// `_applyExplicitPairMappings`, purely for [lockerDisplayLabel]. Only
+  /// populated in paired mode, and only for pairs that actually have a
+  /// custom id; a pair with none simply has no entry here, so
+  /// [lockerDisplayLabel] falls back to the real id for it.
+  final Map<int, int> _customLockerIdByLockerId = {};
+
   /// Mirrors `sharedPreferences["isGlobal"]` — switches phone validation
   /// between South-Africa-only and any-country mode.
   bool isGlobal = false;
@@ -279,6 +288,7 @@ class MockKioskRepository extends ChangeNotifier {
     final config = ConfigService();
     _pairPartnerByLockerId.clear();
     _collectionRoleLockerIds.clear();
+    _customLockerIdByLockerId.clear();
 
     _lockers = config.lockerMapping
         .map((entry) => Locker(id: entry.id, size: _parseSize(entry.size)))
@@ -333,6 +343,12 @@ class MockKioskRepository extends ChangeNotifier {
       _pairPartnerByLockerId[dropoffId] = collectionId;
       _pairPartnerByLockerId[collectionId] = dropoffId;
       _collectionRoleLockerIds.add(collectionId);
+
+      final customLockerId = pair.customLockerId;
+      if (customLockerId != null) {
+        _customLockerIdByLockerId[dropoffId] = customLockerId;
+        _customLockerIdByLockerId[collectionId] = customLockerId;
+      }
     }
   }
 
@@ -684,11 +700,26 @@ class MockKioskRepository extends ChangeNotifier {
   /// entered board layout (see [ConfigService.lockerMapping]'s doc comment
   /// for why that concept was removed) — every screen now just relies on
   /// the plain, total locker count (whether admin-configured or fetched
-  /// from hardware via `syncLockersFromHardware`), so this is now always
-  /// just the flat id itself. Kept as a named method (rather than inlining
-  /// `'$lockerId'` at every call site) so a future display concept has one
-  /// place to change.
-  String lockerDisplayLabel(int lockerId) => '$lockerId';
+  /// from hardware via `syncLockersFromHardware`), so this was, until
+  /// 2026-07-28, always just the flat id itself.
+  ///
+  /// Now, in paired mode, this shows the pair's admin-assigned
+  /// `LockerPairMapping.customLockerId` instead when one is set (see
+  /// `_customLockerIdByLockerId`) — the point of pairing is that the
+  /// customer only ever deals with one *logical* locker (they drop off at
+  /// one door, collect from a different linked one), so showing them
+  /// whichever raw physical door id happens to apply to the step they're on
+  /// is confusing and gives them no way to recognize "their" locker across
+  /// the two steps. A custom id lets an admin give that pair one simple,
+  /// stable label the customer sees both times, decoupled entirely from the
+  /// real door numbering. Falls back to the real [lockerId] exactly as
+  /// before whenever there's no custom id for it (unpaired mode, or a pair
+  /// that hasn't had one set) — this method changes nothing about which
+  /// door actually unlocks, only what's printed on screen.
+  String lockerDisplayLabel(int lockerId) {
+    final customLockerId = _customLockerIdByLockerId[lockerId];
+    return '${customLockerId ?? lockerId}';
+  }
 
   /// Fire-and-forget physical unlock, only when the real gRPC backend is
   /// selected (see `ConfigService.lockerBackend`). In `'mock'` mode this is

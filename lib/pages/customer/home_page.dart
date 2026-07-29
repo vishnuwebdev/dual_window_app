@@ -8,9 +8,9 @@ import '../../core/theme/app_text_styles.dart';
 import '../../core/utilities/app_version.dart';
 import '../../widgets/kiosk/kiosk.dart';
 import '../admin/admin_pin_gate_page.dart';
-import 'collection_input_page.dart';
 import 'deliver_input_page.dart';
 import 'help_page.dart';
+import 'privacy_statement_page.dart';
 import 'verify_pin_page.dart';
 
 /// Customer/Admin window — Home ("Welcome") page.
@@ -127,8 +127,12 @@ class _HomePageState extends State<HomePage> {
   void _handleCollect() {
     if (!widget.collectEnabled) return;
 
+    // Collection has no PIN-gate equivalent to `dropoffPinEnabled` (see
+    // `_handleDeliver`) — every collection goes through the POPIA privacy
+    // consent screen first, with no disclaimer screen after it (unlike the
+    // old drop-off flow, which had both and has since had both removed).
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const CollectionInputPage()),
+      MaterialPageRoute(builder: (_) => const PrivacyStatementPage()),
     );
   }
 

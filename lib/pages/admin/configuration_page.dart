@@ -40,10 +40,16 @@ class ConfigurationPage extends StatefulWidget {
 /// `ConfigService` on every add/remove.
 class _PendingLockerPair {
   const _PendingLockerPair(
-      {required this.dropoffId, required this.collectionId});
+      {required this.dropoffId,
+      required this.collectionId,
+      this.customLockerId});
 
   final int dropoffId;
   final int collectionId;
+
+  /// Mirrors `LockerPairMapping.customLockerId` — see its doc comment.
+  /// `null` means "not set," same meaning as there.
+  final int? customLockerId;
 }
 
 class _ConfigurationPageState extends State<ConfigurationPage>
@@ -84,6 +90,7 @@ class _ConfigurationPageState extends State<ConfigurationPage>
   final List<_PendingLockerPair> _pendingPairs = [];
   int? _selectedDropoffId;
   int? _selectedCollectionId;
+  late final TextEditingController _customLockerIdController;
   String? _pairingError;
 
   @override
@@ -106,6 +113,7 @@ class _ConfigurationPageState extends State<ConfigurationPage>
         : _config.lockerBackend;
     _kioskMode = _config.kioskMode;
     _pairedMode = _config.pairedLockerMode;
+    _customLockerIdController = TextEditingController();
     _loadPendingPairsFromConfig();
   }
 
@@ -115,6 +123,7 @@ class _ConfigurationPageState extends State<ConfigurationPage>
       ..addAll(_config.lockerPairMappings.map((p) => _PendingLockerPair(
             dropoffId: p.dropoffLockerId,
             collectionId: p.collectionLockerId,
+            customLockerId: p.customLockerId,
           )));
   }
 
@@ -122,6 +131,7 @@ class _ConfigurationPageState extends State<ConfigurationPage>
   void dispose() {
     _addressController.dispose();
     _lockerMappingController.dispose();
+    _customLockerIdController.dispose();
     super.dispose();
   }
 
@@ -153,6 +163,7 @@ class _ConfigurationPageState extends State<ConfigurationPage>
           LockerPairMapping(
             dropoffLockerId: p.dropoffId,
             collectionLockerId: p.collectionId,
+            customLockerId: p.customLockerId,
           ),
       ]);
       if (pairingError != null) {
@@ -188,6 +199,7 @@ class _ConfigurationPageState extends State<ConfigurationPage>
       _loadPendingPairsFromConfig();
       _selectedDropoffId = null;
       _selectedCollectionId = null;
+      _customLockerIdController.clear();
       _lockerMappingError = null;
       _pairingError = null;
       _connectionResult = null;
@@ -204,11 +216,38 @@ class _ConfigurationPageState extends State<ConfigurationPage>
         dropoffId == collectionId) {
       return;
     }
+
+    // Optional — an empty field just means "no custom id," same as before
+    // this feature existed (see `LockerPairMapping.customLockerId`'s doc
+    // comment). Only rejects the *add* when something was actually typed
+    // but isn't a valid whole number, so an admin who never touches this
+    // field is never blocked by it.
+    final rawCustomId = _customLockerIdController.text.trim();
+    int? customLockerId;
+    if (rawCustomId.isNotEmpty) {
+      customLockerId = int.tryParse(rawCustomId);
+      if (customLockerId == null) {
+        setState(() => _pairingError = 'Custom locker id must be a whole number.');
+        return;
+      }
+      final alreadyUsed =
+          _pendingPairs.any((p) => p.customLockerId == customLockerId);
+      if (alreadyUsed) {
+        setState(() => _pairingError =
+            'Custom locker id $customLockerId is already used by another pair.');
+        return;
+      }
+    }
+
     setState(() {
-      _pendingPairs.add(
-          _PendingLockerPair(dropoffId: dropoffId, collectionId: collectionId));
+      _pendingPairs.add(_PendingLockerPair(
+        dropoffId: dropoffId,
+        collectionId: collectionId,
+        customLockerId: customLockerId,
+      ));
       _selectedDropoffId = null;
       _selectedCollectionId = null;
+      _customLockerIdController.clear();
       _pairingError = null;
     });
   }
@@ -667,6 +706,22 @@ class _ConfigurationPageState extends State<ConfigurationPage>
                       ],
                     ),
                     const SizedBox(height: 10),
+                    const Text(
+                      'Custom locker id (optional) — shown to the customer '
+                      'on both the drop-off and collection screens instead '
+                      'of the real locker numbers above, so they only ever '
+                      'see one consistent number for this pair. Leave blank '
+                      'to keep showing the real locker id.',
+                      style: AdminTextStyles.body,
+                    ),
+                    const SizedBox(height: 8),
+                    KeyboardTextField(
+                      controller: _customLockerIdController,
+                      style: AdminTextStyles.fieldInput,
+                      decoration: AdminInputStyle.fieldDecoration(
+                          hint: 'e.g. 1 (leave blank for no custom id)'),
+                    ),
+                    const SizedBox(height: 10),
                     OutlinedButton.icon(
                       style: AdminInputStyle.outlinedButton,
                       onPressed:
@@ -690,6 +745,11 @@ class _ConfigurationPageState extends State<ConfigurationPage>
                                 style: AdminTextStyles.body
                                     .copyWith(fontWeight: FontWeight.bold)),
                           ),
+                          Expanded(
+                            child: Text('Custom id',
+                                style: AdminTextStyles.body
+                                    .copyWith(fontWeight: FontWeight.bold)),
+                          ),
                           const SizedBox(width: 40),
                         ],
                       ),
@@ -703,6 +763,12 @@ class _ConfigurationPageState extends State<ConfigurationPage>
                             ),
                             Expanded(
                               child: Text('${_pendingPairs[i].collectionId}',
+                                  style: AdminTextStyles.fieldInput),
+                            ),
+                            Expanded(
+                              child: Text(
+                                  _pendingPairs[i].customLockerId?.toString() ??
+                                      '—',
                                   style: AdminTextStyles.fieldInput),
                             ),
                             SizedBox(

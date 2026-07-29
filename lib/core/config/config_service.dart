@@ -60,6 +60,7 @@ class LockerPairMapping {
   const LockerPairMapping({
     required this.dropoffLockerId,
     required this.collectionLockerId,
+    this.customLockerId,
   });
 
   /// The locker id a customer drops a parcel into — this is the id
@@ -71,9 +72,23 @@ class LockerPairMapping {
   /// collected.
   final int collectionLockerId;
 
+  /// Optional display-only id an admin assigns to this *pair*, shown to the
+  /// customer instead of [dropoffLockerId]/[collectionLockerId] on the
+  /// Drop-off/Collection journey screens — see
+  /// `MockKioskRepository.lockerDisplayLabel`. Purely cosmetic: every other
+  /// piece of logic (which physical door actually unlocks, `db.json`,
+  /// admin's Locker Management table, gRPC's own locker_num, audit logs)
+  /// keeps using the real [dropoffLockerId]/[collectionLockerId] exactly as
+  /// before — this field is never read anywhere except that one display
+  /// lookup. `null` (the default) means "no custom id set," in which case
+  /// the real locker id is still shown, unchanged from before this field
+  /// existed.
+  final int? customLockerId;
+
   Map<String, dynamic> toJson() => {
         'dropoffLockerId': dropoffLockerId,
-        'collectionLockerId': collectionLockerId
+        'collectionLockerId': collectionLockerId,
+        if (customLockerId != null) 'customLockerId': customLockerId,
       };
 
   static LockerPairMapping? tryFromJson(dynamic raw) {
@@ -81,9 +96,16 @@ class LockerPairMapping {
     final dropoffLockerId = raw['dropoffLockerId'];
     final collectionLockerId = raw['collectionLockerId'];
     if (dropoffLockerId is! int || collectionLockerId is! int) return null;
+    // Missing from an older config.json (written before this field
+    // existed) or not an int — both just mean "no custom id," not a
+    // parse failure, so the whole pairing isn't rejected over it.
+    final rawCustomLockerId = raw['customLockerId'];
+    final customLockerId =
+        rawCustomLockerId is int ? rawCustomLockerId : null;
     return LockerPairMapping(
       dropoffLockerId: dropoffLockerId,
       collectionLockerId: collectionLockerId,
+      customLockerId: customLockerId,
     );
   }
 }
@@ -501,6 +523,9 @@ class ConfigService extends ChangeNotifier {
   ///   [totalLockers] is odd, one locker is allowed to stay unpaired
   ///   (there's no way to pair an odd number of lockers up completely).
   ///   Any *more* than that one leftover is rejected.
+  /// - A [LockerPairMapping.customLockerId], if set, must be unique across
+  ///   pairs — two different physical pairs showing the same custom label
+  ///   to customers would be ambiguous (which one does "Locker 5" mean?).
   static String? validateLockerPairMappings(
       List<LockerPairMapping> pairs, int totalLockers) {
     if (totalLockers == 0) {
@@ -508,6 +533,7 @@ class ConfigService extends ChangeNotifier {
     }
 
     final used = <int>{};
+    final usedCustomIds = <int>{};
     for (final pair in pairs) {
       if (pair.dropoffLockerId < 1 || pair.dropoffLockerId > totalLockers) {
         return 'Locker ${pair.dropoffLockerId} does not exist (only '
@@ -526,6 +552,11 @@ class ConfigService extends ChangeNotifier {
       }
       if (!used.add(pair.collectionLockerId)) {
         return 'Locker ${pair.collectionLockerId} is used in more than one pair.';
+      }
+      final customLockerId = pair.customLockerId;
+      if (customLockerId != null && !usedCustomIds.add(customLockerId)) {
+        return 'Custom locker id $customLockerId is used by more than one '
+            'pair.';
       }
     }
 

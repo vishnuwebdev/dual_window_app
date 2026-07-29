@@ -32,6 +32,29 @@ class VirtualKeyboardController extends ChangeNotifier {
   VoidCallback? onBackspace;
   VoidCallback? onDone;
 
+  /// The on-screen keyboard's actual rendered height, as last measured by
+  /// `KeyboardHost` (see `_MeasureAndReport` there). `KeyboardHost` feeds
+  /// this back in as `MediaQuery.viewInsets.bottom` around the rest of the
+  /// app while [visible] is true — the same signal a *real* system keyboard
+  /// would set — so `Scaffold`'s default `resizeToAvoidBottomInset` and
+  /// `TextField`'s built-in scroll-into-view-on-focus behavior both start
+  /// working for free against this overlay keyboard, with no per-page
+  /// scrolling code needed. Starts at 0 (no inset) until the first
+  /// measurement lands a frame after the keyboard first mounts.
+  double keyboardHeight = 0;
+
+  /// Called by `KeyboardHost` after every layout pass while the keyboard is
+  /// mounted. Only notifies when the height actually changed (it's
+  /// effectively constant — both the letter and numeric layouts are 4 rows
+  /// of the same fixed key height — so in practice this fires once per
+  /// keyboard mount, not every frame) to avoid triggering a rebuild loop
+  /// through `KeyboardHost`'s own `ListenableBuilder`.
+  void reportKeyboardHeight(double height) {
+    if ((keyboardHeight - height).abs() < 0.5) return;
+    keyboardHeight = height;
+    _notifySafely();
+  }
+
   /// Called by a `KeyboardTextField` when it gains focus. [owner] should be
   /// a stable, unique-per-field token (its `State` object works well) —
   /// it's what lets [detach] tell "my field blurred" apart from "a *different*

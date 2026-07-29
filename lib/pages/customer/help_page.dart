@@ -123,56 +123,81 @@ class _HelpPageState extends State<HelpPage> with InactivityTimerMixin {
             Column(
               children: [
                 const KioskHeader(),
-                const SizedBox(height: 12),
-                Image.asset('assets/images/click_n_collect.png', height: 100),
-                const SizedBox(height: 12),
-                const Text('Forgot pin?', style: AppTextStyles.heading),
-                const SizedBox(height: 8),
-                const Text(
-                  'Enter cell phone number to receive pin via SMS',
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.label,
-                ),
-                if (!_repo.isGlobal)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 4),
-                    child: Text('(Use +27XXXXXXXXX for South Africa)',
-                        style: AppTextStyles.hint),
+                // The content below used to be laid out directly in this
+                // outer `Column`, with fixed `SizedBox` gaps between every
+                // element — on a shorter viewport (or once the footer text
+                // grew to 3 lines) that fixed total height could exceed
+                // what's actually available under the header, overflowing
+                // the `Column` and clipping the footer behind the bottom
+                // waves graphic (a real "BOTTOM OVERFLOWED BY n PIXELS"
+                // render error, not just a visual nitpick). `Expanded` +
+                // `SingleChildScrollView` gives it exactly the remaining
+                // space and, if that's ever still not enough, scrolls
+                // instead of overflowing — same safety net every other
+                // multi-field customer page (e.g. `DeliverInputPage`) gets
+                // for free from its `Expanded(child: Center(...))` pattern.
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(height: 12),
+                        Image.asset('assets/images/click_n_collect.png',
+                            height: 100),
+                        const SizedBox(height: 12),
+                        const Text('Forgot pin?', style: AppTextStyles.heading),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Enter cell phone number to receive pin via SMS',
+                          textAlign: TextAlign.center,
+                          style: AppTextStyles.label,
+                        ),
+                        if (!_repo.isGlobal)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 4),
+                            child: Text('(Use +27XXXXXXXXX for South Africa)',
+                                style: AppTextStyles.hint),
+                          ),
+                        const SizedBox(height: 20),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SizedBox(
+                              width: 300,
+                              child: KioskTextField(
+                                controller: _phoneController,
+                                hintText: '0821234567',
+                                maxLength: 15,
+                                useVirtualKeyboard: false,
+                              ),
+                            ),
+                            const SizedBox(width: 32),
+                            NumericKeypad(
+                              onDigit: _appendDigit,
+                              onBackspace: _backspace,
+                              onEnter: _handleConfirm,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+                        KioskButton(
+                          label: 'Confirm',
+                          onPressed: _handleConfirm,
+                          width: 220,
+                          textStyle:
+                              AppTextStyles.buttonLabel.copyWith(fontSize: 20),
+                        ),
+                        const SizedBox(height: 24),
+                        Text(
+                          'For any other queries,\nPlease contact our support\nteam on 0870 57 57 55',
+                          textAlign: TextAlign.center,
+                          style: AppTextStyles.label.copyWith(fontSize: 20),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                    ),
                   ),
-                const SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SizedBox(
-                      width: 300,
-                      child: KioskTextField(
-                        controller: _phoneController,
-                        hintText: '0821234567',
-                        maxLength: 15,
-                        useVirtualKeyboard: false,
-                      ),
-                    ),
-                    const SizedBox(width: 32),
-                    NumericKeypad(
-                      onDigit: _appendDigit,
-                      onBackspace: _backspace,
-                      onEnter: _handleConfirm,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                KioskButton(
-                  label: 'Confirm',
-                  onPressed: _handleConfirm,
-                  width: 220,
-                  textStyle: AppTextStyles.buttonLabel.copyWith(fontSize: 20),
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  'For any other queries,\nplease contact our support team\non 0870 57 55 55',
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.label.copyWith(fontSize: 20),
                 ),
               ],
             ),

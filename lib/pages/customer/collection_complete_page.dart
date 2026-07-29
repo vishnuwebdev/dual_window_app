@@ -35,12 +35,13 @@ class _CollectionCompletePageState extends State<CollectionCompletePage>
 
   Timer? _autoReturnTimer;
   late final List<int> _lockerIds;
-  // Human-facing labels ("Board 2, Locker 3" in paired mode, or just the
-  // flat id otherwise) for `_lockerIds`, in the same order — see
-  // `MockKioskRepository.lockerDisplayLabel`. The raw flat id is what
-  // `unlock_locker` actually receives (used for `_lockerIds` itself and
-  // the audit log below), but it's not necessarily what's printed on the
-  // door, so the on-screen message uses these instead.
+  // Human-facing labels for `_lockerIds`, in the same order — an admin's
+  // custom locker id (in paired mode, when one was set for that pair) or
+  // just the flat id otherwise — see `MockKioskRepository.lockerDisplayLabel`.
+  // The raw flat id is what `unlock_locker` actually receives (used for
+  // `_lockerIds` itself and the audit log below), but it's not necessarily
+  // the number the customer should recognize, so the on-screen message uses
+  // these instead.
   late final List<String> _lockerLabels;
   bool _navigated = false;
 

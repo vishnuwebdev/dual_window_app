@@ -35,10 +35,10 @@ class DeliverPlaceParcelPage extends StatefulWidget {
 class _DeliverPlaceParcelPageState extends State<DeliverPlaceParcelPage> {
   Timer? _autoAdvanceTimer;
   int? _lockerId;
-  // Human-facing label ("Board 1, Locker 3" in paired mode, or just the
-  // flat id otherwise) — see `MockKioskRepository.lockerDisplayLabel`.
-  // Physical doors are labeled per-board, not with the internal flat id,
-  // so this — not `_lockerId` — is what the customer should actually see.
+  // Human-facing label — an admin's custom locker id (in paired mode, when
+  // one was set for that pair) or just the flat id otherwise — see
+  // `MockKioskRepository.lockerDisplayLabel`. This — not `_lockerId` — is
+  // what the customer should actually see.
   String? _lockerLabel;
   bool _navigated = false;
 

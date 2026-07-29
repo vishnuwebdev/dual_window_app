@@ -146,65 +146,77 @@ class _DeliverInputPageState extends State<DeliverInputPage>
             const KioskHeader(),
             Expanded(
               child: Center(
-                child: Row(
+                child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    SizedBox(
-                      width: 420,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Enter cell phone number:',
-                              style: AppTextStyles.label),
-                          if (!_repo.isGlobal)
-                            const Padding(
-                              padding: EdgeInsets.only(top: 2, bottom: 8),
-                              child: Text(
-                                  '(Use +27XXXXXXXXX for South Africa)',
-                                  style: AppTextStyles.hint),
-                            ),
-                          KioskTextField(
-                            controller: _phoneController,
-                            maxLength: 15,
-                            useVirtualKeyboard: false,
-                            active: _activeField == _phoneController,
-                            onTap: () => setState(
-                                () => _activeController = _phoneController),
-                            onChanged: (_) =>
-                                setState(() => _errorText = null),
-                          ),
-                          const SizedBox(height: 20),
-                          const Text('Repeat cell phone number:',
-                              style: AppTextStyles.label),
-                          if (!_repo.isGlobal)
-                            const Padding(
-                              padding: EdgeInsets.only(top: 2, bottom: 8),
-                              child: Text(
-                                  '(Use +27XXXXXXXXX for South Africa)',
-                                  style: AppTextStyles.hint),
-                            ),
-                          KioskTextField(
-                            controller: _repeatController,
-                            maxLength: 15,
-                            useVirtualKeyboard: false,
-                            active: _activeField == _repeatController,
-                            onTap: () => setState(
-                                () => _activeController = _repeatController),
-                            onChanged: (_) =>
-                                setState(() => _errorText = null),
-                          ),
-                          if (_errorText != null)
-                            ErrorBanner(message: _errorText!),
-                        ],
-                      ),
+                    const Text(
+                      'In the case of a forgotten/lost pin,\n'
+                      'we will contact you via this number.',
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.label,
                     ),
-                    const SizedBox(width: 40),
-                    NumericKeypad(
-                      onDigit: _appendDigit,
-                      onBackspace: _backspace,
-                      onEnter: _advanceOrSubmit,
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          width: 420,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Enter cell phone number:',
+                                  style: AppTextStyles.label),
+                              if (!_repo.isGlobal)
+                                const Padding(
+                                  padding: EdgeInsets.only(top: 2, bottom: 8),
+                                  child: Text(
+                                      '(Use +27XXXXXXXXX for South Africa)',
+                                      style: AppTextStyles.hint),
+                                ),
+                              KioskTextField(
+                                controller: _phoneController,
+                                maxLength: 15,
+                                useVirtualKeyboard: false,
+                                active: _activeField == _phoneController,
+                                onTap: () => setState(() =>
+                                    _activeController = _phoneController),
+                                onChanged: (_) =>
+                                    setState(() => _errorText = null),
+                              ),
+                              const SizedBox(height: 20),
+                              const Text('Repeat cell phone number:',
+                                  style: AppTextStyles.label),
+                              if (!_repo.isGlobal)
+                                const Padding(
+                                  padding: EdgeInsets.only(top: 2, bottom: 8),
+                                  child: Text(
+                                      '(Use +27XXXXXXXXX for South Africa)',
+                                      style: AppTextStyles.hint),
+                                ),
+                              KioskTextField(
+                                controller: _repeatController,
+                                maxLength: 15,
+                                useVirtualKeyboard: false,
+                                active: _activeField == _repeatController,
+                                onTap: () => setState(() =>
+                                    _activeController = _repeatController),
+                                onChanged: (_) =>
+                                    setState(() => _errorText = null),
+                              ),
+                              if (_errorText != null)
+                                ErrorBanner(message: _errorText!),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 40),
+                        NumericKeypad(
+                          onDigit: _appendDigit,
+                          onBackspace: _backspace,
+                          onEnter: _advanceOrSubmit,
+                        ),
+                      ],
                     ),
                   ],
                 ),

@@ -40,9 +40,36 @@ class KeyboardHost extends StatelessWidget {
             controller.onBackspace != null &&
             controller.onDone != null;
 
+        // Report this overlay keyboard's height as a bottom "view inset" on
+        // everything beneath it — exactly the signal a real system keyboard
+        // sends via `MediaQuery.viewInsets.bottom` — so `Scaffold`'s default
+        // `resizeToAvoidBottomInset` shrinks the page underneath it, and any
+        // focused `TextField`'s built-in scroll-into-view-on-focus (which
+        // already reacts to `viewInsets` changes) auto-scrolls it above the
+        // keyboard instead of leaving it hidden underneath. Only applied
+        // while `ready`, using the last-measured height (0 until the first
+        // post-layout report — see `_MeasureAndReport` — lands, a frame
+        // after the keyboard first mounts).
+        final mediaQuery = MediaQuery.of(context);
+        final bottomInset = ready ? controller.keyboardHeight : 0.0;
+        // `EdgeInsets` has no `copyWith` (unlike `MediaQueryData`), so the
+        // adjusted insets are rebuilt field-by-field from the current ones.
+        final currentInsets = mediaQuery.viewInsets;
+        final adjustedChild = MediaQuery(
+          data: mediaQuery.copyWith(
+            viewInsets: EdgeInsets.only(
+              left: currentInsets.left,
+              top: currentInsets.top,
+              right: currentInsets.right,
+              bottom: currentInsets.bottom + bottomInset,
+            ),
+          ),
+          child: child,
+        );
+
         return Stack(
           children: [
-            Positioned.fill(child: child),
+            Positioned.fill(child: adjustedChild),
             if (ready)
               Positioned(
                 left: 0,
@@ -57,10 +84,13 @@ class KeyboardHost extends StatelessWidget {
                 // specifically to fold a custom keyboard into the same
                 // tap region as the field it's typing into.
                 child: TextFieldTapRegion(
-                  child: CustomKeyboard(
-                    onCharacter: controller.onCharacter!,
-                    onBackspace: controller.onBackspace!,
-                    onDone: controller.onDone!,
+                  child: _MeasureAndReport(
+                    onSize: controller.reportKeyboardHeight,
+                    child: CustomKeyboard(
+                      onCharacter: controller.onCharacter!,
+                      onBackspace: controller.onBackspace!,
+                      onDone: controller.onDone!,
+                    ),
                   ),
                 ),
               ),
@@ -68,5 +98,38 @@ class KeyboardHost extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+/// Reports [child]'s rendered height to [onSize] after every layout pass,
+/// without affecting [child]'s own size or layout in any way — a single
+/// pass-through `RenderBox` measurement, not a second layout constraint.
+/// Used to feed `CustomKeyboard`'s actual on-screen height back into
+/// `VirtualKeyboardController.keyboardHeight` (see `KeyboardHost`'s doc
+/// comment on `mediaQuery` above for why). Deliberately *not* keyed to
+/// `child`'s own state — it measures whatever's currently built, so
+/// toggling between the letter/numeric keyboard layouts (which happen to be
+/// the same height, but wouldn't have to be) is picked up automatically.
+class _MeasureAndReport extends StatefulWidget {
+  const _MeasureAndReport({required this.onSize, required this.child});
+
+  final ValueChanged<double> onSize;
+  final Widget child;
+
+  @override
+  State<_MeasureAndReport> createState() => _MeasureAndReportState();
+}
+
+class _MeasureAndReportState extends State<_MeasureAndReport> {
+  @override
+  Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final box = context.findRenderObject() as RenderBox?;
+      if (box != null && box.hasSize) {
+        widget.onSize(box.size.height);
+      }
+    });
+    return widget.child;
   }
 }

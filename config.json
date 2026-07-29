@@ -36,16 +36,19 @@
   "paired_locker_mode": true,
   "locker_pair_mappings": [
     {
-      "dropoffLockerId": 4,
-      "collectionLockerId": 2
+      "dropoffLockerId": 2,
+      "collectionLockerId": 4,
+      "customLockerId": 2
     },
     {
-      "dropoffLockerId": 3,
-      "collectionLockerId": 5
+      "dropoffLockerId": 5,
+      "collectionLockerId": 3,
+      "customLockerId": 3
     },
     {
-      "dropoffLockerId": 6,
-      "collectionLockerId": 1
+      "dropoffLockerId": 1,
+      "collectionLockerId": 6,
+      "customLockerId": 45
     }
   ]
 }
