@@ -555,6 +555,25 @@ class MockKioskRepository extends ChangeNotifier {
     );
     _items.add(item);
     _persistItems();
+    // Diagnostic-only — distinct from the gRPC `userAudit` trail the
+    // customer-facing pages send (see `deliver_place_parcel_page.dart`),
+    // which only carries the raw locker id in a backend-defined
+    // `parametersJson` schema that isn't safe to change without knowing
+    // what VaultGroup's dashboard expects on the other end. This is a
+    // separate, local-only `logger` line (see `core/utilities/logging.dart`)
+    // that spells out all three locker-id concepts side by side — the door
+    // that's actually opening now (`open_locker_id`), its linked partner
+    // door if this is a paired drop-off (`paired_locker_id`), and the
+    // admin-assigned label the customer's screen is actually showing them
+    // (`custom_locker_id`, via [customLockerIdFor]) — so a support/ops log
+    // read can answer "what door did this customer really use" without
+    // having to cross-reference `config.json`'s pairing table by hand.
+    logger.i(
+      'Dropoff: locker assigned — phone=$normalizedPhone, '
+      'open_locker_id=$lockerId, '
+      'paired_locker_id=${item.collectionLockerId ?? "-"}, '
+      'custom_locker_id=${customLockerIdFor(lockerId) ?? "-"}',
+    );
     // Mirrors `DbService.addItem` -> `openLocker(item.lockerId)`: physically
     // unlock the assigned locker so the customer can place their parcel.
     // Only the drop-off door itself opens here — its paired collection
@@ -575,7 +594,21 @@ class MockKioskRepository extends ChangeNotifier {
     // back to `lockerId` itself outside paired mode (single door, same as
     // before this feature existed).
     for (final item in items) {
-      _unlockPhysicalLocker(item.collectionLockerId ?? item.lockerId);
+      final openLockerId = item.collectionLockerId ?? item.lockerId;
+      // The *other* side of the pair, for the same reason spelled out in
+      // `addItem`'s matching log line — only meaningful when this item was
+      // actually paired at drop-off time (`collectionLockerId != null`);
+      // outside paired mode `item.lockerId` just equals `openLockerId`
+      // itself, so logging it again as "paired" would be misleading.
+      final pairedLockerId =
+          item.collectionLockerId != null ? item.lockerId : null;
+      logger.i(
+        'Pickup: locker opened — phone=${item.phone}, '
+        'open_locker_id=$openLockerId, '
+        'paired_locker_id=${pairedLockerId ?? "-"}, '
+        'custom_locker_id=${customLockerIdFor(openLockerId) ?? "-"}',
+      );
+      _unlockPhysicalLocker(openLockerId);
     }
     notifyListeners();
   }
@@ -720,6 +753,15 @@ class MockKioskRepository extends ChangeNotifier {
     final customLockerId = _customLockerIdByLockerId[lockerId];
     return '${customLockerId ?? lockerId}';
   }
+
+  /// Raw lookup into `_customLockerIdByLockerId` — `null` when [lockerId]
+  /// has no custom id set (unpaired, or a pair with none configured),
+  /// distinct from [lockerDisplayLabel]'s already-resolved "custom id if
+  /// set, else the real id" *string*. Exists for call sites (currently just
+  /// the drop-off/collection diagnostic logging in [addItem]/[removeItems])
+  /// that need to tell "no custom id" apart from "custom id happens to
+  /// equal the real id," which a resolved display string can't do.
+  int? customLockerIdFor(int lockerId) => _customLockerIdByLockerId[lockerId];
 
   /// Fire-and-forget physical unlock, only when the real gRPC backend is
   /// selected (see `ConfigService.lockerBackend`). In `'mock'` mode this is

@@ -12,7 +12,7 @@ import 'package:flutter/material.dart';
 /// screen sitting exposed on the public customer kiosk before any
 /// authentication has happened, so it keeps the stricter 30s default
 /// rather than leaving an unlocked-looking prompt open for 5 minutes.
-const kAdminInactivityTimeout = Duration(minutes: 1);
+const kAdminInactivityTimeout = Duration(minutes: 5);
 
 /// Recreates the inactivity-timeout pattern found on almost every Android
 /// activity in the kiosk app: a `Handler.postDelayed` timer that fires
