@@ -146,18 +146,6 @@ class _HelpPageState extends State<HelpPage> with InactivityTimerMixin {
                             height: 100),
                         const SizedBox(height: 12),
                         const Text('Forgot pin?', style: AppTextStyles.heading),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Enter cell phone number to receive pin via SMS',
-                          textAlign: TextAlign.center,
-                          style: AppTextStyles.label,
-                        ),
-                        if (!_repo.isGlobal)
-                          const Padding(
-                            padding: EdgeInsets.only(top: 4),
-                            child: Text('(Use +27XXXXXXXXX for South Africa)',
-                                style: AppTextStyles.hint),
-                          ),
                         const SizedBox(height: 20),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -165,11 +153,35 @@ class _HelpPageState extends State<HelpPage> with InactivityTimerMixin {
                           children: [
                             SizedBox(
                               width: 300,
-                              child: KioskTextField(
-                                controller: _phoneController,
-                                hintText: '0821234567',
-                                maxLength: 15,
-                                useVirtualKeyboard: false,
+                              child: Column(
+                                children: [
+                                  const Text(
+                                    'Enter cell phone number to receive pin via SMS',
+                                    textAlign: TextAlign.center,
+                                    style: AppTextStyles.label,
+                                  ),
+                                  if (!_repo.isGlobal)
+                                    const Padding(
+                                      padding: EdgeInsets.only(top: 4),
+                                      child: Text(
+                                          '(Use +27XXXXXXXXX for South Africa)',
+                                          style: AppTextStyles.hint),
+                                    ),
+                                  const SizedBox(height: 20),
+                                  KioskTextField(
+                                    controller: _phoneController,
+                                    hintText: '0821234567',
+                                    maxLength: 15,
+                                    useVirtualKeyboard: false,
+                                  ),
+                                  const SizedBox(height: 24),
+                                  Text(
+                                    'For any other queries,\nPlease contact our support\nteam on 0870 57 57 55',
+                                    textAlign: TextAlign.center,
+                                    style: AppTextStyles.label
+                                        .copyWith(fontSize: 20),
+                                  ),
+                                ],
                               ),
                             ),
                             const SizedBox(width: 32),
@@ -187,12 +199,6 @@ class _HelpPageState extends State<HelpPage> with InactivityTimerMixin {
                           width: 220,
                           textStyle:
                               AppTextStyles.buttonLabel.copyWith(fontSize: 20),
-                        ),
-                        const SizedBox(height: 24),
-                        Text(
-                          'For any other queries,\nPlease contact our support\nteam on 0870 57 57 55',
-                          textAlign: TextAlign.center,
-                          style: AppTextStyles.label.copyWith(fontSize: 20),
                         ),
                         const SizedBox(height: 12),
                       ],
