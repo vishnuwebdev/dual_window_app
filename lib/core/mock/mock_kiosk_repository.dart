@@ -757,11 +757,44 @@ class MockKioskRepository extends ChangeNotifier {
   /// Raw lookup into `_customLockerIdByLockerId` — `null` when [lockerId]
   /// has no custom id set (unpaired, or a pair with none configured),
   /// distinct from [lockerDisplayLabel]'s already-resolved "custom id if
-  /// set, else the real id" *string*. Exists for call sites (currently just
-  /// the drop-off/collection diagnostic logging in [addItem]/[removeItems])
-  /// that need to tell "no custom id" apart from "custom id happens to
-  /// equal the real id," which a resolved display string can't do.
+  /// set, else the real id" *string*. Exists for call sites (the drop-off/
+  /// collection diagnostic logging in [addItem]/[removeItems], and
+  /// [lockerAuditDetails] below) that need to tell "no custom id" apart
+  /// from "custom id happens to equal the real id," which a resolved
+  /// display string can't do.
   int? customLockerIdFor(int lockerId) => _customLockerIdByLockerId[lockerId];
+
+  /// Formats all four locker-id concepts for one physical parcel event, for
+  /// appending to the `description` sent to `LockerGrpcService.userAudit`
+  /// (which VaultGroup's Rapid7 platform actually ingests — unlike the
+  /// local-only diagnostic `logger` lines in [addItem]/[removeItems], this
+  /// is what shows up on the ops-facing log platform, per the 2026-07-30
+  /// request to make the drop-off/pickup success audit entries carry this
+  /// alongside their existing `parametersJson`, which is left untouched
+  /// since its shape is defined by whatever VaultGroup's backend already
+  /// expects there).
+  ///
+  /// [openLockerId] is whichever door is physically unlocking for *this*
+  /// specific event — the drop-off door itself on drop-off, or the paired
+  /// collection door (falling back to the drop-off door outside paired
+  /// mode) on collection. [dropOffLockerId]/[collectionLockerId] are the
+  /// pair's two fixed roles regardless of which step this call is for
+  /// (`collectionLockerId` is `null` outside paired mode). Deliberately
+  /// repeats whichever of Drop-off/Collection equals [openLockerId] rather
+  /// than omitting it as "obviously redundant" — the two audit call sites
+  /// (drop-off, pickup) end up with a log line in the exact same shape
+  /// either way, so reading one doesn't require first knowing which event
+  /// it came from.
+  String lockerAuditDetails({
+    required int openLockerId,
+    required int dropOffLockerId,
+    int? collectionLockerId,
+  }) {
+    final customLockerId = customLockerIdFor(openLockerId);
+    return 'Open lockerId: $openLockerId, DropOff LockerId: $dropOffLockerId, '
+        'Collection LockerId: ${collectionLockerId ?? '-'}, '
+        'Custom Locker Id: ${customLockerId ?? '-'}';
+  }
 
   /// Fire-and-forget physical unlock, only when the real gRPC backend is
   /// selected (see `ConfigService.lockerBackend`). In `'mock'` mode this is

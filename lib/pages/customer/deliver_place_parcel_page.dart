@@ -82,7 +82,16 @@ class _DeliverPlaceParcelPageState extends State<DeliverPlaceParcelPage> {
           code: AuditCodes.dropoffSuccess,
           priority: AuditLogPriority.medium,
           level: AuditLogLevel.info,
-          description: 'Dropoff: success',
+          // `parametersJson` below is left as the raw locker id only — its
+          // shape is whatever VaultGroup's backend already expects there.
+          // The extra locker-id breakdown instead goes into `description`,
+          // which Rapid7 shows as free text — see
+          // `MockKioskRepository.lockerAuditDetails`'s doc comment.
+          description: 'Dropoff: success — ${repo.lockerAuditDetails(
+            openLockerId: locker.id,
+            dropOffLockerId: locker.id,
+            collectionLockerId: item.collectionLockerId,
+          )}',
           parametersJson: '["${widget.phone}",${locker.id}]',
         ));
       }

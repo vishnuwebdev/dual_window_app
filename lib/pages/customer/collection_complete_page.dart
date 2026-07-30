@@ -80,11 +80,27 @@ class _CollectionCompletePageState extends State<CollectionCompletePage>
           description: 'Pickup: started',
           parametersJson: '["${widget.phone}",${_lockerIds.join(",")}]',
         ));
+        // One "Open/DropOff/Collection/Custom" breakdown per matched item
+        // (almost always exactly one — a PIN identifies a single parcel —
+        // but built from `matches` rather than assuming that, in case more
+        // than one ever shares the same phone+PIN), joined so the
+        // `description` still reads as one line per locker even when
+        // there's more than one. `parametersJson` below is untouched — see
+        // the matching comment on the drop-off audit call in
+        // `deliver_place_parcel_page.dart`.
+        final lockerDetails = matches.map((item) {
+          final openLockerId = item.collectionLockerId ?? item.lockerId;
+          return repo.lockerAuditDetails(
+            openLockerId: openLockerId,
+            dropOffLockerId: item.lockerId,
+            collectionLockerId: item.collectionLockerId,
+          );
+        }).join('; ');
         unawaited(grpc.userAudit(
           code: AuditCodes.pickupSuccess,
           priority: AuditLogPriority.medium,
           level: AuditLogLevel.info,
-          description: 'Pickup: success',
+          description: 'Pickup: success — $lockerDetails',
           parametersJson: '["${widget.phone}",${_lockerIds.join(",")}]',
         ));
       } else {
