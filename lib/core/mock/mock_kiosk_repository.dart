@@ -649,7 +649,8 @@ class MockKioskRepository extends ChangeNotifier {
   /// check it.
   void clearLocker(int lockerId) {
     final matching = _items
-        .where((i) => i.lockerId == lockerId || i.collectionLockerId == lockerId)
+        .where(
+            (i) => i.lockerId == lockerId || i.collectionLockerId == lockerId)
         .toList();
     _items.removeWhere(matching.contains);
     _persistItems();
@@ -721,7 +722,8 @@ class MockKioskRepository extends ChangeNotifier {
   String _doorLabel(int lockerId) {
     final partner = _pairPartnerByLockerId[lockerId];
     if (partner == null) return '$lockerId';
-    final role = _collectionRoleLockerIds.contains(lockerId) ? 'Collection' : 'Drop-off';
+    final role =
+        _collectionRoleLockerIds.contains(lockerId) ? 'Collection' : 'Drop-off';
     return 'Locker $lockerId ($role, paired with Locker $partner)';
   }
 

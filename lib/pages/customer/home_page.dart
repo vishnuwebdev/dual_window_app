@@ -92,6 +92,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _handleBadgeTap() {
+    if (widget.collectEnabled) return;
     _badgeTapCount++;
     _badgeTapResetTimer?.cancel();
 

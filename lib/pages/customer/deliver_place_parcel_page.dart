@@ -23,7 +23,8 @@ import 'deliver_dropoff_complete_page.dart';
 /// app — see the screen inventory). Here they go to the Dropoff Complete
 /// screen instead, so that screen has a reachable place in the flow.
 class DeliverPlaceParcelPage extends StatefulWidget {
-  const DeliverPlaceParcelPage({super.key, required this.phone, required this.size});
+  const DeliverPlaceParcelPage(
+      {super.key, required this.phone, required this.size});
 
   final String phone;
   final LockerSize size;
@@ -60,7 +61,8 @@ class _DeliverPlaceParcelPageState extends State<DeliverPlaceParcelPage> {
           priority: AuditLogPriority.low,
           level: AuditLogLevel.info,
           description: 'Dropoff: started',
-          parametersJson: '["${widget.phone}",${locker.id}]',
+          parametersJson: '["${widget.phone}",${locker.id},'
+              '${repo.customLockerIdFor(locker.id) ?? "null"}]',
         ));
       }
 
@@ -73,26 +75,27 @@ class _DeliverPlaceParcelPageState extends State<DeliverPlaceParcelPage> {
       // notification. `repo.addItem` above already triggered the physical
       // unlock (see `MockKioskRepository._unlockPhysicalLocker`) when in
       // 'grpc' mode; this submits the SMS itself the same way.
-      final message =
-          ConfigService().smsTemplate.replaceAll('{pin}', item.pin);
+      final message = ConfigService().smsTemplate.replaceAll('{pin}', item.pin);
       logger.i('Sending SMS to ${widget.phone}: "$message"');
       if (isGrpc) {
+        final customLockerId = repo.customLockerIdFor(locker.id) ?? "null";
         unawaited(grpc.sendSms(widget.phone, message));
         unawaited(grpc.userAudit(
           code: AuditCodes.dropoffSuccess,
           priority: AuditLogPriority.medium,
           level: AuditLogLevel.info,
-          // `parametersJson` below is left as the raw locker id only — its
-          // shape is whatever VaultGroup's backend already expects there.
-          // The extra locker-id breakdown instead goes into `description`,
-          // which Rapid7 shows as free text — see
+          // `parametersJson` below now also appends the custom locker id
+          // (`null` when unset) after the raw locker id, per request. The
+          // full breakdown still goes into `description` too, which Rapid7
+          // shows as free text — see
           // `MockKioskRepository.lockerAuditDetails`'s doc comment.
           description: 'Dropoff: success — ${repo.lockerAuditDetails(
             openLockerId: locker.id,
             dropOffLockerId: locker.id,
             collectionLockerId: item.collectionLockerId,
           )}',
-          parametersJson: '["${widget.phone}",${locker.id}]',
+          parametersJson: '["${widget.phone}",${locker.id},'
+              '$customLockerId]',
         ));
       }
     }
@@ -130,7 +133,8 @@ class _DeliverPlaceParcelPageState extends State<DeliverPlaceParcelPage> {
               const KioskHeader(),
               Expanded(
                 child: Center(
-                  child: InstructionPanel(text: text, width: 700, height: 380, fontSize: 28),
+                  child: InstructionPanel(
+                      text: text, width: 700, height: 380, fontSize: 28),
                 ),
               ),
             ],

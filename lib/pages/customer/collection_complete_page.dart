@@ -65,6 +65,8 @@ class _CollectionCompletePageState extends State<CollectionCompletePage>
         .toList()
       ..sort();
     _lockerLabels = _lockerIds.map(repo.lockerDisplayLabel).toList();
+    final customLockerIdsJson =
+        _lockerIds.map((id) => repo.customLockerIdFor(id) ?? 'null').join(',');
 
     // Audit trail mirrors `DbService.removeItem`'s pickup flow. A pin that
     // matched nothing approximates Android's AUDIT_LOG_PICKUP_WRONG_PIN;
@@ -78,16 +80,18 @@ class _CollectionCompletePageState extends State<CollectionCompletePage>
           priority: AuditLogPriority.low,
           level: AuditLogLevel.info,
           description: 'Pickup: started',
-          parametersJson: '["${widget.phone}",${_lockerIds.join(",")}]',
+          parametersJson: '["${widget.phone}",${_lockerIds.join(",")},'
+              '$customLockerIdsJson]',
         ));
         // One "Open/DropOff/Collection/Custom" breakdown per matched item
         // (almost always exactly one — a PIN identifies a single parcel —
         // but built from `matches` rather than assuming that, in case more
         // than one ever shares the same phone+PIN), joined so the
         // `description` still reads as one line per locker even when
-        // there's more than one. `parametersJson` below is untouched — see
-        // the matching comment on the drop-off audit call in
-        // `deliver_place_parcel_page.dart`.
+        // there's more than one. `parametersJson` below also appends each
+        // locker's custom id (`null` when unset), in the same order as
+        // `_lockerIds` — see the matching comment on the drop-off audit
+        // call in `deliver_place_parcel_page.dart`.
         final lockerDetails = matches.map((item) {
           final openLockerId = item.collectionLockerId ?? item.lockerId;
           return repo.lockerAuditDetails(
@@ -101,7 +105,8 @@ class _CollectionCompletePageState extends State<CollectionCompletePage>
           priority: AuditLogPriority.medium,
           level: AuditLogLevel.info,
           description: 'Pickup: success — $lockerDetails',
-          parametersJson: '["${widget.phone}",${_lockerIds.join(",")}]',
+          parametersJson: '["${widget.phone}",${_lockerIds.join(",")},'
+              '$customLockerIdsJson]',
         ));
       } else {
         unawaited(grpc.userAudit(
@@ -157,7 +162,8 @@ class _CollectionCompletePageState extends State<CollectionCompletePage>
                 const KioskHeader(),
                 Expanded(
                   child: Center(
-                    child: InstructionPanel(text: text, width: 700, height: 380, fontSize: 30),
+                    child: InstructionPanel(
+                        text: text, width: 700, height: 380, fontSize: 30),
                   ),
                 ),
               ],
