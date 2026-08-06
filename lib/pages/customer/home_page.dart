@@ -19,6 +19,15 @@ import 'verify_pin_page.dart';
 /// "Collect" buttons, the Help shortcut, and a locker-availability check
 /// that disables "Drop off" when every compartment is occupied.
 ///
+/// Both buttons are also disabled whenever
+/// `MockKioskRepository.slaveBoardConnected` is false — a background poll
+/// (`MockKioskRepository._pollSlaveBoardOnce`, every 15s while
+/// `ConfigService.isGrpcBackend`) asking the unit's `get_slave_firmware`
+/// RPC whether any slave board is actually responding right now. Neither
+/// journey has anywhere to physically open a locker without one, even if
+/// `cvmain` itself answers. This is a 2026-07-30 addition; always `true`
+/// (no gating) in `'mock'` mode, where there's no hardware to check.
+///
 /// Shared by both physical windows, each restricted to one function: the
 /// Customer window shows this with [dropOffEnabled] false (collect-only),
 /// and the Admin window shows it with [collectEnabled] false (drop-off
@@ -108,7 +117,11 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _handleDeliver() {
-    if (!widget.dropOffEnabled || _repo.getFreeLockers().isEmpty) return;
+    if (!widget.dropOffEnabled ||
+        _repo.getFreeLockers().isEmpty ||
+        !_repo.slaveBoardConnected) {
+      return;
+    }
 
     if (_repo.dropoffPinEnabled) {
       Navigator.of(context).push(
@@ -126,7 +139,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _handleCollect() {
-    if (!widget.collectEnabled) return;
+    if (!widget.collectEnabled || !_repo.slaveBoardConnected) return;
 
     // Collection has no PIN-gate equivalent to `dropoffPinEnabled` (see
     // `_handleDeliver`) — every collection goes through the POPIA privacy
@@ -199,7 +212,9 @@ class _HomePageState extends State<HomePage> {
                     KioskButton(
                       label: 'Drop off',
                       onPressed: _handleDeliver,
-                      enabled: widget.dropOffEnabled && hasFreeLockers,
+                      enabled: widget.dropOffEnabled &&
+                          hasFreeLockers &&
+                          _repo.slaveBoardConnected,
                       textStyle: const TextStyle(
                         fontSize: 50,
                         fontWeight: FontWeight.w600,
@@ -213,7 +228,7 @@ class _HomePageState extends State<HomePage> {
                     KioskButton(
                       label: 'Collect',
                       onPressed: _handleCollect,
-                      enabled: widget.collectEnabled,
+                      enabled: widget.collectEnabled && _repo.slaveBoardConnected,
                       textStyle: const TextStyle(
                         fontSize: 50,
                         fontWeight: FontWeight.w600,
@@ -226,7 +241,22 @@ class _HomePageState extends State<HomePage> {
                 ],
               ),
               const SizedBox(height: 12),
-              if (widget.dropOffEnabled && !hasFreeLockers)
+              // Hardware-connectivity takes priority over the "no free
+              // lockers" message below — if the unit's slave board isn't
+              // even responding, telling the customer "occupied" would be
+              // misleading (`_repo.getFreeLockers()` reflects the last
+              // known/cached inventory, not live hardware state, so it can
+              // still report free lockers even while the board is down).
+              if (!_repo.slaveBoardConnected)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 40),
+                  child: Text(
+                    'This locker is temporarily unavailable, please try again shortly.',
+                    textAlign: TextAlign.center,
+                    style: AppTextStyles.label.copyWith(fontSize: 18),
+                  ),
+                )
+              else if (widget.dropOffEnabled && !hasFreeLockers)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 40),
                   child: Text(

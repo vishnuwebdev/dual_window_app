@@ -114,6 +114,34 @@ class MockKioskRepository extends ChangeNotifier {
   /// [lockerDisplayLabel] falls back to the real id for it.
   final Map<int, int> _customLockerIdByLockerId = {};
 
+  /// How often to poll the unit for slave-board connectivity — see
+  /// [_pollSlaveBoardOnce]/[slaveBoardConnected]. Kept well above the
+  /// gRPC call's own 5s timeout (`LockerGrpcService._callTimeout`) so a
+  /// slow/unreachable unit can never cause two polls to overlap in
+  /// practice, and long enough that this can't meaningfully compete with
+  /// real customer-triggered gRPC calls (unlock, sendSms, ...) for network/
+  /// unit attention — this is a background health signal, not something
+  /// that needs sub-second freshness.
+  static const _slaveBoardPollInterval = Duration(seconds: 15);
+
+  Timer? _slaveBoardPollTimer;
+
+  /// Guards against overlapping polls — if a call is still in flight (e.g.
+  /// the unit is slow to respond) when the next tick fires, that tick is
+  /// skipped rather than starting a second concurrent RPC.
+  bool _slaveBoardPollInFlight = false;
+
+  /// Whether the unit currently reports at least one connected slave board
+  /// — see `LockerGrpcService.hasConnectedSlaveBoard`. Drives the Home
+  /// page's Drop off/Collect buttons: disabled while this is false, since
+  /// neither journey has anywhere to physically open without one. Starts
+  /// (and stays, in `'mock'` mode) `true` — optimistic by default, and
+  /// correct outright in mock mode where there's no hardware to check at
+  /// all — updated by [_pollSlaveBoardOnce] only when running against a
+  /// real/simulated unit (`ConfigService.isGrpcBackend`).
+  bool get slaveBoardConnected => _slaveBoardConnected;
+  bool _slaveBoardConnected = true;
+
   /// Mirrors `sharedPreferences["isGlobal"]` — switches phone validation
   /// between South-Africa-only and any-country mode.
   bool isGlobal = false;
@@ -141,6 +169,7 @@ class MockKioskRepository extends ChangeNotifier {
     await _loadItemsFromDisk();
     _initialized = true;
     _startWatching();
+    _restartSlaveBoardPolling();
     logger.i(
         'MockKioskRepository initialized (${_items.length} item(s) loaded from db.json)');
 
@@ -199,7 +228,58 @@ class MockKioskRepository extends ChangeNotifier {
   @override
   void dispose() {
     _watchSubscription?.cancel();
+    _slaveBoardPollTimer?.cancel();
     super.dispose();
+  }
+
+  /// (Re)starts [_slaveBoardPollTimer] to match the current backend mode —
+  /// called once from [initialize] and again every time config changes
+  /// (see [_syncLockersFromConfig]), so toggling `'mock'`/`'grpc'` from the
+  /// Configuration page takes effect immediately rather than only after a
+  /// restart. Cancels any existing timer first, so this is always safe to
+  /// call repeatedly (e.g. on every unrelated config edit, not just a
+  /// backend-mode change) without ever stacking up duplicate timers.
+  void _restartSlaveBoardPolling() {
+    _slaveBoardPollTimer?.cancel();
+    _slaveBoardPollTimer = null;
+
+    if (!ConfigService().isGrpcBackend) {
+      // No hardware at all in `'mock'` mode — nothing to poll, and the
+      // buttons should never be disabled over this, so force the
+      // optimistic default back on in case it was left `false` from a
+      // previous `'grpc'` session.
+      _setSlaveBoardConnected(true);
+      return;
+    }
+
+    unawaited(_pollSlaveBoardOnce()); // check immediately, not just from
+    // the first timer tick — otherwise the buttons would sit in their
+    // stale/default enabled state for a full `_slaveBoardPollInterval`
+    // after every app start or backend-mode switch.
+    _slaveBoardPollTimer =
+        Timer.periodic(_slaveBoardPollInterval, (_) => _pollSlaveBoardOnce());
+  }
+
+  Future<void> _pollSlaveBoardOnce() async {
+    if (_slaveBoardPollInFlight) return;
+    _slaveBoardPollInFlight = true;
+    try {
+      final connected = await LockerGrpcService.instance.hasConnectedSlaveBoard();
+      _setSlaveBoardConnected(connected);
+    } finally {
+      _slaveBoardPollInFlight = false;
+    }
+  }
+
+  void _setSlaveBoardConnected(bool value) {
+    // Only rebuild dependents (see `HomePage._onRepoChanged`) when the
+    // status actually flips — a poll confirming "still connected" every
+    // 15s shouldn't trigger a UI rebuild each time, only the transitions
+    // in either direction matter.
+    if (_slaveBoardConnected == value) return;
+    _slaveBoardConnected = value;
+    logger.i('MockKioskRepository: slave board connected = $value');
+    notifyListeners();
   }
 
   Future<void> _loadItemsFromDisk() async {
@@ -303,6 +383,17 @@ class MockKioskRepository extends ChangeNotifier {
         !validIds.contains(item.lockerId) ||
         (item.collectionLockerId != null &&
             !validIds.contains(item.collectionLockerId)));
+
+    // Config changes include backend-mode/address edits from the
+    // Configuration page — restarting here (rather than only once in
+    // `initialize()`) means flipping `'mock'`/`'grpc'` or repointing the
+    // unit's address takes effect on the next poll instead of only after
+    // a restart. Guarded to only run once `initialize()` has actually
+    // been called — this method also runs as part of construction
+    // (`_syncLockersFromConfig()` in the constructor, before `initialize`
+    // has loaded `db.json` yet), and polling that early would race the
+    // rest of startup for no benefit.
+    if (_initialized) _restartSlaveBoardPolling();
 
     notifyListeners();
   }

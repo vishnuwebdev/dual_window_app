@@ -122,6 +122,31 @@ class LockerGrpcService {
     }
   }
 
+  /// Whether the unit currently reports at least one connected slave board
+  /// — reuses `get_slave_firmware` (see [checkHealth]'s doc comment), but
+  /// checks the actual `firmware` list rather than just `resp.success`:
+  /// the RPC's own doc comment ("returns the version number for each slave
+  /// board") means an empty list is a legitimate "the call succeeded, but
+  /// nothing answered" case that a bare success flag wouldn't catch. Used
+  /// by `MockKioskRepository`'s periodic poll to gate the Home page's Drop
+  /// off/Collect buttons — no slave board means no physical locker to open
+  /// for either journey, even if `cvmain` itself is reachable. Returns
+  /// false (never null) on any failure, same fail-safe direction as every
+  /// other call in this class — "couldn't confirm a board's there" is
+  /// treated the same as "no board."
+  Future<bool> hasConnectedSlaveBoard() async {
+    try {
+      final client = _clientFor(ConfigService().lockerAddress);
+      final response = await client.get_slave_firmware(Empty());
+      return response.hasResp() &&
+          response.resp.success &&
+          response.firmware.isNotEmpty;
+    } catch (e) {
+      logger.w('LockerGrpcService.hasConnectedSlaveBoard failed: $e');
+      return false;
+    }
+  }
+
   /// Mirrors `DbService.openLocker`: physically unlocks the given locker.
   /// Returns true only on a confirmed success response — callers (see
   /// `MockKioskRepository`) should treat a false return the same way the
