@@ -2,10 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/config/config_service.dart';
+import '../../core/grpc/locker_grpc_service.dart';
 import '../../core/mock/mock_kiosk_repository.dart';
+import '../../core/registration/audit_codes.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/utilities/app_version.dart';
+import '../../core/utilities/logging.dart';
 import '../../widgets/kiosk/kiosk.dart';
 import '../admin/admin_pin_gate_page.dart';
 import 'deliver_input_page.dart';
@@ -70,14 +74,102 @@ class _HomePageState extends State<HomePage> {
   // that (near-instant) asset read completes.
   String _versionLabel = '';
 
+  // Last-logged enabled state of each button — `null` until the first
+  // check, so that check (run once from `initState`) always logs the
+  // starting state rather than only later transitions. Compared against on
+  // every repo change (see `_logButtonStateChangesIfAny`) so a log line is
+  // only emitted when a button's *actual* enabled state flips, not on
+  // every unrelated repo notification (e.g. a parcel being dropped off
+  // elsewhere shouldn't produce a Collect-button log line here).
+  bool? _lastDropOffButtonEnabled;
+  bool? _lastCollectButtonEnabled;
+
   @override
   void initState() {
     super.initState();
     _repo.addListener(_onRepoChanged);
+    _logButtonStateChangesIfAny();
     AppVersion.name().then((version) {
       if (!mounted) return;
       setState(() => _versionLabel = 'V$version');
     });
+  }
+
+  /// Logs a line whenever the Drop off/Collect button's *actual* enabled
+  /// state (the same AND of conditions used in `build()`'s `enabled:` and
+  /// `_handleDeliver`/`_handleCollect`'s early-return checks) differs from
+  /// what was last logged — includes the slave-board reason specifically
+  /// when that's what's driving a `disabled` result, since that's the
+  /// condition this was added to make traceable (2026-07-30). Only checks
+  /// whichever button this window actually offers (mirrors the `if
+  /// (!widget.collectEnabled)`/`if (widget.collectEnabled)` split in
+  /// `build()` — see the class doc comment for why each window only shows
+  /// one of the two).
+  ///
+  /// A transition to `disabled` specifically *because* the slave board
+  /// isn't connected is also escalated to Rapid7 via
+  /// `LockerGrpcService.userAudit` — see [_reportSlaveBoardDisabled]'s doc
+  /// comment for why only that direction (never the "re-enabled" recovery)
+  /// gets sent there.
+  void _logButtonStateChangesIfAny() {
+    if (!widget.collectEnabled) {
+      final enabled = widget.dropOffEnabled &&
+          _repo.getFreeLockers().isNotEmpty &&
+          _repo.slaveBoardConnected;
+      if (enabled != _lastDropOffButtonEnabled) {
+        logger.i('HomePage: Drop off button ${enabled ? "enabled" : "disabled"}'
+            '${_repo.slaveBoardConnected ? "" : " — slave board not connected"}');
+        _lastDropOffButtonEnabled = enabled;
+        if (!enabled && !_repo.slaveBoardConnected) {
+          _reportSlaveBoardDisabled(
+            code: AuditCodes.dropoffUnlockingFailure,
+            description: 'Dropoff: unavailable — Drop off button disabled, '
+                'slave board not connected',
+          );
+        }
+      }
+    }
+    if (widget.collectEnabled) {
+      final enabled = widget.collectEnabled && _repo.slaveBoardConnected;
+      if (enabled != _lastCollectButtonEnabled) {
+        logger.i('HomePage: Collect button ${enabled ? "enabled" : "disabled"}'
+            '${_repo.slaveBoardConnected ? "" : " — slave board not connected"}');
+        _lastCollectButtonEnabled = enabled;
+        if (!enabled && !_repo.slaveBoardConnected) {
+          _reportSlaveBoardDisabled(
+            code: AuditCodes.pickupUnlockingFailure,
+            description: 'Pickup: unavailable — Collect button disabled, '
+                'slave board not connected',
+          );
+        }
+      }
+    }
+  }
+
+  /// Sends a `userAudit` event to Rapid7 for a button just having been
+  /// disabled because the slave board isn't connected — deliberately only
+  /// called for that one direction, never for the matching "re-enabled"
+  /// recovery: there's no existing `AuditCodes` value that means "hardware
+  /// is available again" without borrowing a *success* code like
+  /// `dropoffSuccess`/`pickupSuccess`, which specifically mean "a real
+  /// drop-off/pickup transaction just completed" — reusing either of those
+  /// here would misrepresent a button becoming enabled as an actual
+  /// customer transaction on the dashboard. [code] has no dedicated real
+  /// code for "hardware unavailable" in VaultGroup's `LogConstants.kt`
+  /// (see `AuditCodes`'s class doc comment) — `dropoffUnlockingFailure`/
+  /// `pickupUnlockingFailure` are used as the closest existing stand-ins
+  /// (both already mean "couldn't unlock," which is exactly why the button
+  /// is being disabled pre-emptively) until a dedicated code is confirmed.
+  /// No-ops outside `'grpc'` mode — nothing to report to in `'mock'` mode,
+  /// where there's no unit to relay this to Rapid7 through anyway.
+  void _reportSlaveBoardDisabled({required int code, required String description}) {
+    if (!ConfigService().isGrpcBackend) return;
+    unawaited(LockerGrpcService.instance.userAudit(
+      code: code,
+      priority: AuditLogPriority.normal,
+      level: AuditLogLevel.warning,
+      description: description,
+    ));
   }
 
   @override
@@ -96,7 +188,9 @@ class _HomePageState extends State<HomePage> {
   void _onRepoChanged() {
     if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) setState(() {});
+      if (!mounted) return;
+      _logButtonStateChangesIfAny();
+      setState(() {});
     });
   }
 
