@@ -122,6 +122,7 @@ class _InfoDialogState extends State<InfoDialog> {
                 child: InkWell(
                   customBorder: const CircleBorder(),
                   onTap: _close,
+                  mouseCursor: SystemMouseCursors.none,
                   child: Container(
                     width: 44,
                     height: 44,

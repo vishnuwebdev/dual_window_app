@@ -31,6 +31,39 @@ class CustomerWindowApp extends StatelessWidget {
         brightness: Brightness.dark,
         useMaterial3: true,
         fontFamily: 'Metropolis',
+        // Stock Material buttons (Elevated/Outlined/Text/Icon/Filled) each
+        // supply their own hover cursor by default, which wins over the
+        // root MouseRegion below since cursor resolution picks the deepest
+        // region that sets one. Forcing it to `none` here at the theme
+        // level covers every button on this window without touching each
+        // call site individually — see also the explicit `mouseCursor`
+        // added to the few raw `InkWell`s, which aren't covered by these
+        // button themes.
+        elevatedButtonTheme: const ElevatedButtonThemeData(
+          style: ButtonStyle(
+            mouseCursor: WidgetStatePropertyAll(SystemMouseCursors.none),
+          ),
+        ),
+        outlinedButtonTheme: const OutlinedButtonThemeData(
+          style: ButtonStyle(
+            mouseCursor: WidgetStatePropertyAll(SystemMouseCursors.none),
+          ),
+        ),
+        textButtonTheme: const TextButtonThemeData(
+          style: ButtonStyle(
+            mouseCursor: WidgetStatePropertyAll(SystemMouseCursors.none),
+          ),
+        ),
+        filledButtonTheme: const FilledButtonThemeData(
+          style: ButtonStyle(
+            mouseCursor: WidgetStatePropertyAll(SystemMouseCursors.none),
+          ),
+        ),
+        iconButtonTheme: const IconButtonThemeData(
+          style: ButtonStyle(
+            mouseCursor: WidgetStatePropertyAll(SystemMouseCursors.none),
+          ),
+        ),
       ),
       debugShowCheckedModeBanner: false,
       home: const HomePage(dropOffEnabled: false),

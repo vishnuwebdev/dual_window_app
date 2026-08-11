@@ -19,6 +19,7 @@ class BackImageButton extends StatelessWidget {
         child: InkWell(
           onTap: onPressed,
           borderRadius: BorderRadius.circular(8),
+          mouseCursor: SystemMouseCursors.none,
           child: Padding(
             padding: const EdgeInsets.all(8),
             child: Image.asset('assets/images/back.png', width: 56, height: 48),
