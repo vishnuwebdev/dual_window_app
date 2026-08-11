@@ -20,6 +20,53 @@ static void first_frame_cb(MyApplication* self, FlView* view) {
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
 }
 
+// Applies a fully transparent (blank) cursor to a widget's own GdkWindow,
+// realizing the widget first if it isn't already realized. This app is a
+// touch-only kiosk (target: Raspberry Pi touchscreen) with no mouse, so
+// every window's OS cursor should default to hidden; Flutter's own
+// `MouseRegion`s then layer per-widget cursors (click, none, ...) on top
+// of this native baseline.
+//
+// This has to be applied per-window, not just once for the app's primary
+// window: `desktop_multi_window` creates every additional window (e.g.
+// this app's Customer/Collect window) through its own native code path in
+// `MultiWindowManager::Create()`, entirely outside `my_application_activate`
+// below, with no cursor handling of its own. A window that never gets this
+// baseline applied falls back to the plain OS arrow cursor over its whole
+// screen — not just the gaps between buttons — until Flutter happens to
+// successfully push a cursor of its own to that specific `GdkWindow`, which
+// is exactly the intermittent "cursor hidden correctly on one screen but
+// visible everywhere on the other" and "shows as an arrow, not the hand
+// cursor" symptoms reported: the primary window (`my_application_activate`)
+// had this baseline; any window `desktop_multi_window` spawned did not.
+static void apply_blank_cursor(GtkWidget* view_widget) {
+  if (!gtk_widget_get_realized(view_widget)) {
+    gtk_widget_realize(view_widget);
+  }
+  GdkWindow* gdk_window = gtk_widget_get_window(view_widget);
+  if (gdk_window == nullptr) {
+    return;
+  }
+  GdkCursor* blank_cursor = gdk_cursor_new_for_display(
+      gdk_window_get_display(gdk_window), GDK_BLANK_CURSOR);
+  gdk_window_set_cursor(gdk_window, blank_cursor);
+  g_object_unref(blank_cursor);
+}
+
+// Some window managers reset a window's cursor to the OS default the
+// moment it (re)gains input focus. On a kiosk with two windows visible at
+// once (Drop-off + Collect), focus shifts between them as each is tapped,
+// so re-applying the blank cursor on every focus-in makes the baseline
+// resilient to that instead of depending on a single realize-time call
+// sticking for the rest of the window's life — another plausible source
+// of the reported intermittent behavior.
+static gboolean reapply_blank_cursor_on_focus(GtkWidget* widget,
+                                              GdkEventFocus* event,
+                                              gpointer user_data) {
+  apply_blank_cursor(GTK_WIDGET(user_data));
+  return FALSE;  // Don't consume the event — let focus handling continue.
+}
+
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
@@ -74,21 +121,35 @@ static void my_application_activate(GApplication* application) {
                            self);
   gtk_widget_realize(GTK_WIDGET(view));
 
-  // This is a touch-only kiosk app (target: Raspberry Pi touchscreen) with
-  // no mouse or keyboard, so hide the OS pointer entirely by applying a
-  // blank cursor to the view's window once it's realized.
-  GdkWindow* gdk_window = gtk_widget_get_window(GTK_WIDGET(view));
-  if (gdk_window != nullptr) {
-    GdkCursor* blank_cursor = gdk_cursor_new_for_display(
-        gdk_window_get_display(gdk_window), GDK_BLANK_CURSOR);
-    gdk_window_set_cursor(gdk_window, blank_cursor);
-    g_object_unref(blank_cursor);
-  }
+  // See `apply_blank_cursor`'s doc comment: this is a touch-only kiosk with
+  // no mouse, and this same fix has to be repeated below for every window
+  // `desktop_multi_window` creates on its own.
+  apply_blank_cursor(GTK_WIDGET(view));
+  g_signal_connect(window, "focus-in-event",
+                   G_CALLBACK(reapply_blank_cursor_on_focus), view);
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
 
-   desktop_multi_window_plugin_set_window_created_callback(
-         [](FlPluginRegistry* registry) { fl_register_plugins(registry); });
+  desktop_multi_window_plugin_set_window_created_callback(
+      [](FlPluginRegistry* registry) {
+        fl_register_plugins(registry);
+
+        // `registry` is the new window's `FlView`, passed through as the
+        // plugin-registry interface it implements (mirrors how
+        // `desktop_multi_window` itself uses this callback just to call
+        // `fl_register_plugins`). Apply the same blank-cursor baseline the
+        // primary window gets above — see `apply_blank_cursor`'s doc
+        // comment for why every `desktop_multi_window`-created window
+        // otherwise never gets one.
+        GtkWidget* view_widget = GTK_WIDGET(FL_VIEW(registry));
+        apply_blank_cursor(view_widget);
+        GtkWidget* toplevel = gtk_widget_get_toplevel(view_widget);
+        if (GTK_IS_WINDOW(toplevel)) {
+          g_signal_connect(toplevel, "focus-in-event",
+                           G_CALLBACK(reapply_blank_cursor_on_focus),
+                           view_widget);
+        }
+      });
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }
