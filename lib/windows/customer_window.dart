@@ -31,39 +31,6 @@ class CustomerWindowApp extends StatelessWidget {
         brightness: Brightness.dark,
         useMaterial3: true,
         fontFamily: 'Metropolis',
-        // Stock Material buttons (Elevated/Outlined/Text/Icon/Filled) each
-        // supply their own hover cursor by default, which wins over the
-        // root MouseRegion below since cursor resolution picks the deepest
-        // region that sets one. Forcing it to `none` here at the theme
-        // level covers every button on this window without touching each
-        // call site individually — see also the explicit `mouseCursor`
-        // added to the few raw `InkWell`s, which aren't covered by these
-        // button themes.
-        elevatedButtonTheme: const ElevatedButtonThemeData(
-          style: ButtonStyle(
-            mouseCursor: WidgetStatePropertyAll(SystemMouseCursors.none),
-          ),
-        ),
-        outlinedButtonTheme: const OutlinedButtonThemeData(
-          style: ButtonStyle(
-            mouseCursor: WidgetStatePropertyAll(SystemMouseCursors.none),
-          ),
-        ),
-        textButtonTheme: const TextButtonThemeData(
-          style: ButtonStyle(
-            mouseCursor: WidgetStatePropertyAll(SystemMouseCursors.none),
-          ),
-        ),
-        filledButtonTheme: const FilledButtonThemeData(
-          style: ButtonStyle(
-            mouseCursor: WidgetStatePropertyAll(SystemMouseCursors.none),
-          ),
-        ),
-        iconButtonTheme: const IconButtonThemeData(
-          style: ButtonStyle(
-            mouseCursor: WidgetStatePropertyAll(SystemMouseCursors.none),
-          ),
-        ),
       ),
       debugShowCheckedModeBanner: false,
       home: const HomePage(dropOffEnabled: false),
@@ -72,7 +39,10 @@ class CustomerWindowApp extends StatelessWidget {
       // kiosk pages uses `KioskTextField` (built on `KeyboardTextField`),
       // so this on-screen keyboard now sees real use on this window too.
       // Wrapped in a cursor-less MouseRegion since this is a touch-only
-      // kiosk: there's no mouse, so the OS pointer should never be drawn.
+      // kiosk with no mouse: the OS pointer stays hidden everywhere
+      // *except* the interactive elements that explicitly opt back in to
+      // a visible cursor (buttons via `BouncyTap`/Material's own default,
+      // the VG badge, Back, and dialog Close — see each site's comment).
       builder: (context, child) => MouseRegion(
         cursor: SystemMouseCursors.none,
         child: KeyboardHost(child: child ?? const SizedBox()),

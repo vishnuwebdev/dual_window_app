@@ -373,27 +373,34 @@ class _HomePageState extends State<HomePage> {
                 InkWell(
                   onTap: _handleHelp,
                   borderRadius: BorderRadius.circular(8),
-                  mouseCursor: SystemMouseCursors.none,
                   child: Image.asset('assets/images/help.png', height: 60),
                 ),
                 const SizedBox(width: 16),
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: _handleBadgeTap,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Image.asset('assets/images/vg_square_blue.png',
-                          width: 56, height: 56),
-                      const SizedBox(height: 4),
-                      Text(
-                        _versionLabel,
-                        style: AppTextStyles.label.copyWith(
-                          fontSize: 12,
-                          color: AppColors.white.withOpacity(0.6),
+                MouseRegion(
+                  // VG badge (5-tap -> Admin PIN gate) explicitly opts
+                  // back in to a visible cursor, same as the other named
+                  // interactive elements — the root MouseRegion hides the
+                  // cursor everywhere else on this touch-only kiosk, and
+                  // this plain GestureDetector has no cursor of its own.
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _handleBadgeTap,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Image.asset('assets/images/vg_square_blue.png',
+                            width: 56, height: 56),
+                        const SizedBox(height: 4),
+                        Text(
+                          _versionLabel,
+                          style: AppTextStyles.label.copyWith(
+                            fontSize: 12,
+                            color: AppColors.white.withOpacity(0.6),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ],

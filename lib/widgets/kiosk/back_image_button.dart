@@ -19,7 +19,9 @@ class BackImageButton extends StatelessWidget {
         child: InkWell(
           onTap: onPressed,
           borderRadius: BorderRadius.circular(8),
-          mouseCursor: SystemMouseCursors.none,
+          // Cursor stays visible here (default click) — Back is one of the
+          // few elements this touch-only kiosk explicitly keeps a cursor
+          // on, unlike the rest of the screen (root MouseRegion is `none`).
           child: Padding(
             padding: const EdgeInsets.all(8),
             child: Image.asset('assets/images/back.png', width: 56, height: 48),

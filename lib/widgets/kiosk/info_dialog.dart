@@ -122,7 +122,10 @@ class _InfoDialogState extends State<InfoDialog> {
                 child: InkWell(
                   customBorder: const CircleBorder(),
                   onTap: _close,
-                  mouseCursor: SystemMouseCursors.none,
+                  // Cursor stays visible here (default click) — the dialog
+                  // Close icon is one of the few elements this touch-only
+                  // kiosk explicitly keeps a cursor on, unlike the rest of
+                  // the screen (root MouseRegion is `none`).
                   child: Container(
                     width: 44,
                     height: 44,

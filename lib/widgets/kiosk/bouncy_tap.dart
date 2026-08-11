@@ -55,13 +55,22 @@ class _BouncyTapState extends State<BouncyTap>
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: (_) => _pressDown(),
-      onTapCancel: _release,
-      onTapUp: (_) => _release(),
-      onTap: widget.onTap,
-      child: Transform.scale(scale: _controller.value, child: widget.child),
+    return MouseRegion(
+      // Every `BouncyTap` (KioskButton, NumericKeypad keys, admin menu
+      // grid tiles) is a button, so it explicitly opts back in to a
+      // visible cursor even though the rest of this touch-only kiosk's
+      // screen hides the OS pointer (root MouseRegion is `none`) — plain
+      // `GestureDetector` has no cursor of its own, so this has to be set
+      // here rather than relying on a Material default like `InkWell` does.
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) => _pressDown(),
+        onTapCancel: _release,
+        onTapUp: (_) => _release(),
+        onTap: widget.onTap,
+        child: Transform.scale(scale: _controller.value, child: widget.child),
+      ),
     );
   }
 }

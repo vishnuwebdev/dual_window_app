@@ -187,7 +187,6 @@ class _SizeBox extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        mouseCursor: SystemMouseCursors.none,
         child: Container(
           width: size,
           height: size,
