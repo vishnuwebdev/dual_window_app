@@ -74,6 +74,17 @@ static void my_application_activate(GApplication* application) {
                            self);
   gtk_widget_realize(GTK_WIDGET(view));
 
+  // This is a touch-only kiosk app (target: Raspberry Pi touchscreen) with
+  // no mouse or keyboard, so hide the OS pointer entirely by applying a
+  // blank cursor to the view's window once it's realized.
+  GdkWindow* gdk_window = gtk_widget_get_window(GTK_WIDGET(view));
+  if (gdk_window != nullptr) {
+    GdkCursor* blank_cursor = gdk_cursor_new_for_display(
+        gdk_window_get_display(gdk_window), GDK_BLANK_CURSOR);
+    gdk_window_set_cursor(gdk_window, blank_cursor);
+    g_object_unref(blank_cursor);
+  }
+
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
 
    desktop_multi_window_plugin_set_window_created_callback(

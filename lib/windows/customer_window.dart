@@ -38,7 +38,12 @@ class CustomerWindowApp extends StatelessWidget {
       // comment in admin_window.dart. Every phone/PIN field in the ported
       // kiosk pages uses `KioskTextField` (built on `KeyboardTextField`),
       // so this on-screen keyboard now sees real use on this window too.
-      builder: (context, child) => KeyboardHost(child: child ?? const SizedBox()),
+      // Wrapped in a cursor-less MouseRegion since this is a touch-only
+      // kiosk: there's no mouse, so the OS pointer should never be drawn.
+      builder: (context, child) => MouseRegion(
+        cursor: SystemMouseCursors.none,
+        child: KeyboardHost(child: child ?? const SizedBox()),
+      ),
     );
   }
 }

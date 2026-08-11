@@ -40,7 +40,12 @@ class AdminWindowApp extends StatelessWidget {
       home: const HomePage(collectEnabled: false),
       // Mounts the shared on-screen keyboard once, above every route this
       // window's Navigator ever pushes — see KeyboardHost's doc comment.
-      builder: (context, child) => KeyboardHost(child: child ?? const SizedBox()),
+      // Wrapped in a cursor-less MouseRegion since this is a touch-only
+      // kiosk: there's no mouse, so the OS pointer should never be drawn.
+      builder: (context, child) => MouseRegion(
+        cursor: SystemMouseCursors.none,
+        child: KeyboardHost(child: child ?? const SizedBox()),
+      ),
     );
   }
 }
