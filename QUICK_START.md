@@ -25,7 +25,7 @@ cp /Users/vishnusharma/project/Vault/cv-wep-frontend/lib/core/generated/service.
 ### Step 2: Get Dependencies (1 min)
 
 ```bash
-cd /Users/vishnusharma/project/Vault/multi-window-app
+cd /Users/vishnusharma/project/Vault/cnc_dual_screen
 flutter pub get
 ```
 

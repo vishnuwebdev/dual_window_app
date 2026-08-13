@@ -3,7 +3,7 @@
 ================================================================================
 
 Project: Flutter Desktop App for Locker Control on Raspberry Pi 5
-Location: /Users/vishnusharma/project/Vault/multi-window-app
+Location: /Users/vishnusharma/project/Vault/cnc_dual_screen
 Status: ✅ COMPLETE & READY FOR USE
 Date: July 10, 2026
 
@@ -46,7 +46,7 @@ THIS FILE
 Execute this command NOW:
 
   cp /Users/vishnusharma/project/Vault/cv-wep-frontend/lib/core/generated/service.pb*.dart \
-     /Users/vishnusharma/project/Vault/multi-window-app/lib/core/generated/
+     /Users/vishnusharma/project/Vault/cnc_dual_screen/lib/core/generated/
 
 This copies 3 files needed for gRPC communication:
   - service.pb.dart
@@ -62,7 +62,7 @@ Without these files, the app will NOT compile.
 1. Copy protocol buffers (see above)
 
 2. Get dependencies:
-   $ cd /Users/vishnusharma/project/Vault/multi-window-app
+   $ cd /Users/vishnusharma/project/Vault/cnc_dual_screen
    $ flutter pub get
 
 3. Run the app:
@@ -280,7 +280,7 @@ DEVELOPMENT (Local Machine)
 
 LINUX RELEASE BUILD
   $ flutter build linux --release
-  $ ./build/linux/x64/release/bundle/multi_window_app
+  $ ./build/linux/x64/release/bundle/cnc_dual_screen
 
 RASPBERRY PI 5 DEPLOYMENT
   # Install Flutter on RPi

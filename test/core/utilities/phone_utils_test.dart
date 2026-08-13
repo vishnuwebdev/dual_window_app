@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:multi_window_app/core/utilities/phone_utils.dart';
+import 'package:cnc_dual_screen/core/utilities/phone_utils.dart';
 
 void main() {
   group('PhoneUtils.validatePhoneNumber', () {

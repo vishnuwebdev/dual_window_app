@@ -8,7 +8,7 @@ Both projects use the same gRPC communication layer:
 
 1. **gRPC Client**: `CVMainClientService`
    - Located in cv-wep-frontend: `lib/core/api/cvmain_client.dart`
-   - Reused in multi-window-app: `lib/core/api/cvmain_client.dart`
+   - Reused in cnc_dual_screen: `lib/core/api/cvmain_client.dart`
    - Same backend connection logic
 
 2. **Configuration Service**: `ConfigService`
@@ -23,7 +23,7 @@ Both projects use the same gRPC communication layer:
 
 ### What's Different
 
-| Aspect | cv-wep-frontend | multi-window-app |
+| Aspect | cv-wep-frontend | cnc_dual_screen |
 |--------|-----------------|------------------|
 | **Platform** | Mobile (iOS/Android) | Desktop (Linux/macOS) |
 | **UI Framework** | Material 3 Mobile | Material 3 Desktop |
@@ -53,13 +53,13 @@ cd /Users/vishnusharma/project/Vault/cv-wep-frontend
 
 # Copy generated protocol buffer files
 cp lib/core/generated/service.pb.dart \
-   /Users/vishnusharma/project/Vault/multi-window-app/lib/core/generated/
+   /Users/vishnusharma/project/Vault/cnc_dual_screen/lib/core/generated/
 
 cp lib/core/generated/service.pbgrpc.dart \
-   /Users/vishnusharma/project/Vault/multi-window-app/lib/core/generated/
+   /Users/vishnusharma/project/Vault/cnc_dual_screen/lib/core/generated/
 
 cp lib/core/generated/service.pbjson.dart \
-   /Users/vishnusharma/project/Vault/multi-window-app/lib/core/generated/
+   /Users/vishnusharma/project/Vault/cnc_dual_screen/lib/core/generated/
 ```
 
 ### What These Files Contain
@@ -81,7 +81,7 @@ cp lib/core/generated/service.pbjson.dart \
 ### Verifying the Copy
 
 ```bash
-cd /Users/vishnusharma/project/Vault/multi-window-app
+cd /Users/vishnusharma/project/Vault/cnc_dual_screen
 
 # Check files exist
 ls -la lib/core/generated/
@@ -117,7 +117,7 @@ import '../utilities/logging.dart';
 
 ```bash
 # Start the app
-cd /Users/vishnusharma/project/Vault/multi-window-app
+cd /Users/vishnusharma/project/Vault/cnc_dual_screen
 flutter run
 
 # Check console output:
@@ -160,9 +160,9 @@ nano lib/core/generated/service.proto
 # (Run from project root with protoc compiler)
 protoc --dart_out=grpc:lib/core/generated lib/core/generated/service.proto
 
-# 3. Copy to multi-window-app
+# 3. Copy to cnc_dual_screen
 cp lib/core/generated/service.pb*.dart \
-   /Users/vishnusharma/project/Vault/multi-window-app/lib/core/generated/
+   /Users/vishnusharma/project/Vault/cnc_dual_screen/lib/core/generated/
 
 # 4. Run pub get in both projects
 flutter pub get
@@ -185,7 +185,7 @@ Customer App (Flutter Mobile)
   Physical Locker
 ```
 
-### multi-window-app (Desktop)
+### cnc_dual_screen (Desktop)
 ```
 Operator App (Flutter Desktop)
         ↓
@@ -223,7 +223,7 @@ Operator App (Flutter Desktop)
 
 1. Backend changes .proto file
 2. Regenerate code in cv-wep-frontend
-3. Copy to multi-window-app
+3. Copy to cnc_dual_screen
 4. Both apps automatically use new protocol
 
 ### When Adding Features
@@ -247,7 +247,7 @@ Operator App (Flutter Desktop)
 - Push notifications
 - Mobile-specific features
 
-### Desktop Deployment (multi-window-app)
+### Desktop Deployment (cnc_dual_screen)
 - Docker container
 - Direct Linux installation
 - Raspberry Pi distribution
@@ -269,7 +269,7 @@ Both apps use the same gRPC channel:
 - CPU: Modern mobile processor
 - Network: WiFi or cellular
 
-**Desktop (multi-window-app)**
+**Desktop (cnc_dual_screen)**
 - RAM: 1GB - 4GB
 - CPU: Modern desktop/embedded CPU
 - Network: Ethernet or WiFi

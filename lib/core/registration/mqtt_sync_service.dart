@@ -114,7 +114,7 @@ class MqttSyncService extends ChangeNotifier {
       }
 
       final clientId =
-          'multi-window-app-$username-${DateTime.now().millisecondsSinceEpoch}';
+          'cnc_dual_screen-$username-${DateTime.now().millisecondsSinceEpoch}';
       final client = MqttServerClient.withPort(host, clientId, port);
       client.secure = secure;
       client.logging(on: false);

@@ -1,4 +1,4 @@
-name: multi_window_app
+name: cnc_dual_screen
 description: Multi-window Flutter Desktop application with physical locker gRPC control
 
 publish_to: "none"

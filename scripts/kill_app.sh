@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Stops the multi_window_app kiosk on Linux (Raspberry Pi/arm64 or any
+# Stops the cnc_dual_screen kiosk on Linux (Raspberry Pi/arm64 or any
 # Linux desktop build). Matches by process name rather than PID file since
 # the `desktop_multi_window` plugin spawns each secondary window (e.g. the
 # Admin window) as its own OS process, re-launching the same binary with
@@ -15,7 +15,7 @@
 
 set -uo pipefail
 
-APP_NAME="multi_window_app"
+APP_NAME="cnc_dual_screen"
 
 pids=$(pgrep -f "$APP_NAME" || true)
 

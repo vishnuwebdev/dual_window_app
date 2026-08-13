@@ -142,7 +142,7 @@
 ## 📂 Directory Structure Created
 
 ```
-multi-window-app/
+cnc_dual_screen/
 │
 ├── lib/
 │   ├── main.dart                          ✅ Entry point
@@ -224,7 +224,7 @@ multi-window-app/
 
 ```bash
 # 1. Navigate to project
-cd /Users/vishnusharma/project/Vault/multi-window-app
+cd /Users/vishnusharma/project/Vault/cnc_dual_screen
 
 # 2. Copy protocol buffer files
 cp /Users/vishnusharma/project/Vault/cv-wep-frontend/lib/core/generated/service.pb*.dart \
@@ -361,13 +361,13 @@ flutter run
 ### Linux Desktop (Release)
 ```bash
 flutter build linux --release
-./build/linux/x64/release/bundle/multi_window_app
+./build/linux/x64/release/bundle/cnc_dual_screen
 ```
 
 ### Raspberry Pi 5
 ```bash
 # On RPi 5:
-cd ~/projects/multi-window-app
+cd ~/projects/cnc_dual_screen
 flutter build linux --release
 ```
 
@@ -499,7 +499,7 @@ See SETUP_GUIDE.md → Troubleshooting section
 
 ## 📝 Notes
 
-- All files created in `/Users/vishnusharma/project/Vault/multi-window-app`
+- All files created in `/Users/vishnusharma/project/Vault/cnc_dual_screen`
 - Protocol buffer files must be copied from cv-wep-frontend
 - No modifications needed to cv-wep-frontend project
 - Both projects use the same backend

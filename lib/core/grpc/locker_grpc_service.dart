@@ -211,7 +211,7 @@ class LockerGrpcService {
     required String description,
     required String level,
     String parametersJson = '',
-    String app = 'multi_window_app',
+    String app = 'cnc_dual_screen',
   }) async {
     try {
       final client = _clientFor(ConfigService().lockerAddress);

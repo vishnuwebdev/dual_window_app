@@ -7,7 +7,7 @@ This is a Flutter Desktop application for controlling physical lockers via gRPC.
 ## Project Structure
 
 ```
-multi-window-app/
+cnc_dual_screen/
 ├── lib/
 │   ├── bloc/
 │   │   └── locker/
@@ -54,11 +54,11 @@ multi-window-app/
 
 ```bash
 # If using from the provided location
-cd /Users/vishnusharma/project/Vault/multi-window-app
+cd /Users/vishnusharma/project/Vault/cnc_dual_screen
 
 # Or copy to your desired location
-cp -r multi-window-app ~/projects/
-cd ~/projects/multi-window-app
+cp -r cnc_dual_screen ~/projects/
+cd ~/projects/cnc_dual_screen
 ```
 
 ### 2. Install Flutter (if not already installed)
@@ -181,8 +181,8 @@ flutter --version
 
 # 3. Clone/copy the app
 cd ~/projects
-git clone <your-repo> multi-window-app
-cd multi-window-app
+git clone <your-repo> cnc_dual_screen
+cd cnc_dual_screen
 
 # 4. Get dependencies
 flutter pub get
@@ -202,7 +202,7 @@ cat > ~/.local/share/applications/locker-control.desktop << 'DESKTOP'
 Type=Application
 Name=Locker Control
 Comment=Physical Locker Control System
-Exec=/home/pi/projects/multi-window-app/build/linux/x64/release/bundle/multi_window_app
+Exec=/home/pi/projects/cnc_dual_screen/build/linux/x64/release/bundle/cnc_dual_screen
 Icon=folder-lock
 Categories=Utility;
 DESKTOP

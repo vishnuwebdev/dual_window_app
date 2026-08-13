@@ -177,7 +177,7 @@ class ConfigService extends ChangeNotifier {
   /// (see `UnitRegistrationService.mirrorToCvmainConfig`'s doc comment).
   /// Used as the actual default now — not just a placeholder — since this
   /// app only targets this one known Pi deployment (cvmain +
-  /// multi-window-app, no Android app involved). Still editable via the
+  /// cnc_dual_screen, no Android app involved). Still editable via the
   /// Unit Registration page if a different unit ever uses a different
   /// path.
   static const String _defaultCvmainConfigDir = '/home/pi/cv/cvmain/config';

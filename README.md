@@ -5,7 +5,7 @@ A Flutter Desktop application for controlling physical lockers on Raspberry Pi 5
 ## Overview
 
 ```
-📱 Mobile App (cv-wep-frontend)          🖥️ Desktop App (multi-window-app)
+📱 Mobile App (cv-wep-frontend)          🖥️ Desktop App (cnc_dual_screen)
       Customer                                  Operator/Admin
         ↓                                             ↓
    Open Locker                                   Open Locker
@@ -240,7 +240,7 @@ await client.dispose();
 
 ```bash
 flutter build linux --release
-./build/linux/x64/release/bundle/multi_window_app
+./build/linux/x64/release/bundle/cnc_dual_screen
 ```
 
 ### Raspberry Pi 5

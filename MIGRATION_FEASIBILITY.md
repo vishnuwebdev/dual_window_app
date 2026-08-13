@@ -1,7 +1,7 @@
-# click-n-collect → multi_window_app: migration feasibility
+# click-n-collect → cnc_dual_screen: migration feasibility
 
 Source analyzed: `za.co.vaultgroup.click_n_collect` (Android, 18 activities + 8 util/service
-classes) and the current state of this Flutter project (`multi_window_app`, Admin/Customer
+classes) and the current state of this Flutter project (`cnc_dual_screen`, Admin/Customer
 dual-window POC on `desktop_multi_window` + `window_manager` + `screen_retriever`).
 
 ## Bottom line

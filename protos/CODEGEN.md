@@ -40,7 +40,7 @@ export PATH="$PATH:$HOME/.pub-cache/bin"   # protoc needs `protoc-gen-dart` on P
 
 ## 3. Generate
 
-Run from the `multi-window-app` project root:
+Run from the `cnc_dual_screen` project root:
 
 ```bash
 mkdir -p lib/generated

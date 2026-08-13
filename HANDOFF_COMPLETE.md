@@ -2,13 +2,13 @@
 
 **Date**: July 10, 2026  
 **Status**: ✅ **READY FOR USE**  
-**Location**: `/Users/vishnusharma/project/Vault/multi-window-app`
+**Location**: `/Users/vishnusharma/project/Vault/cnc_dual_screen`
 
 ---
 
 ## 📋 Executive Summary
 
-A complete **Flutter Desktop application** for controlling physical lockers via gRPC has been integrated into your multi-window-app project. The app can run on Raspberry Pi 5 and uses the same backend as your mobile cv-wep-frontend app.
+A complete **Flutter Desktop application** for controlling physical lockers via gRPC has been integrated into your cnc_dual_screen project. The app can run on Raspberry Pi 5 and uses the same backend as your mobile cv-wep-frontend app.
 
 ### Key Stats
 - **15 new/modified files** created
@@ -93,18 +93,18 @@ The app needs generated protocol buffer files from cv-wep-frontend:
 ```bash
 # Copy these 3 files
 cp /Users/vishnusharma/project/Vault/cv-wep-frontend/lib/core/generated/service.pb.dart \
-   /Users/vishnusharma/project/Vault/multi-window-app/lib/core/generated/
+   /Users/vishnusharma/project/Vault/cnc_dual_screen/lib/core/generated/
 
 cp /Users/vishnusharma/project/Vault/cv-wep-frontend/lib/core/generated/service.pbgrpc.dart \
-   /Users/vishnusharma/project/Vault/multi-window-app/lib/core/generated/
+   /Users/vishnusharma/project/Vault/cnc_dual_screen/lib/core/generated/
 
 cp /Users/vishnusharma/project/Vault/cv-wep-frontend/lib/core/generated/service.pbjson.dart \
-   /Users/vishnusharma/project/Vault/multi-window-app/lib/core/generated/
+   /Users/vishnusharma/project/Vault/cnc_dual_screen/lib/core/generated/
 ```
 
 ### Step 2: Get Dependencies
 ```bash
-cd /Users/vishnusharma/project/Vault/multi-window-app
+cd /Users/vishnusharma/project/Vault/cnc_dual_screen
 flutter pub get
 ```
 
@@ -308,7 +308,7 @@ flutter run
 ### Linux Release
 ```bash
 flutter build linux --release
-./build/linux/x64/release/bundle/multi_window_app
+./build/linux/x64/release/bundle/cnc_dual_screen
 ```
 
 ### Raspberry Pi 5
@@ -512,7 +512,7 @@ Everything is in place. Just need to:
 ---
 
 **Created**: July 10, 2026  
-**Location**: `/Users/vishnusharma/project/Vault/multi-window-app`  
+**Location**: `/Users/vishnusharma/project/Vault/cnc_dual_screen`  
 **Version**: 1.0.0  
 **Platform**: Flutter Desktop (Linux/Raspberry Pi)  
 **Backend**: CVMain gRPC Service  
