@@ -24,10 +24,11 @@ import '../../widgets/kiosk/info_dialog.dart' show kDialogAutoCloseDuration;
 /// `UnitRegistrationService.mirrorToCvmainConfig`), since registering
 /// *this app* alone has no effect on whether the unit shows "online" on
 /// VaultGroup's dashboard — that's driven entirely by cvmain's own MQTT
-/// session on the physical unit. Restarting cvmain itself is deliberately
-/// left as a manual SSH step (`sudo pkill -f cvmain_rs`) rather than
-/// something this app automates — see the doc comment on
-/// `mirrorToCvmainConfig` for why.
+/// session on the physical unit. Mirroring happens automatically (after
+/// registering, after a JWT refresh, and whenever the directory below is
+/// saved) rather than behind a manual button; restarting cvmain itself is
+/// handled by a separate process on the unit that watches this directory,
+/// not by this app.
 ///
 /// Uses the same navy/teal/Metropolis "admin chrome"
 /// (`AdminSectionCard`/`AdminTextStyles`/`AdminInputStyle`) as
@@ -63,7 +64,6 @@ class _UnitRegistrationPageState extends State<UnitRegistrationPage>
   String? _resultMessage;
   bool _resultIsError = false;
   bool _refreshingJwt = false;
-  bool _mirroring = false;
   bool _resetting = false;
   String? _syncSavedMessage;
 
@@ -105,8 +105,9 @@ class _UnitRegistrationPageState extends State<UnitRegistrationPage>
     // Auto-mirror to the physical unit's cvmain config dir right after a
     // successful registration, same as the Android flow does it in one
     // pass — but only if the admin has actually configured the directory
-    // below; otherwise this is a no-op. Restarting cvmain is still a
-    // manual step (see the "Physical unit sync" card below).
+    // below; otherwise this is a no-op. A separate process on the unit
+    // handles restarting cvmain once it sees the files change (see the
+    // "Physical unit sync" card below).
     final mirrorResult = await _service.mirrorToCvmainConfig();
     if (mirrorResult != null) buffer.write('\n\n$mirrorResult');
 
@@ -121,13 +122,30 @@ class _UnitRegistrationPageState extends State<UnitRegistrationPage>
     setState(() => _refreshingJwt = true);
     final ok = await _service.refreshJwt();
     if (!mounted) return;
+
+    if (!ok) {
+      setState(() {
+        _refreshingJwt = false;
+        _resultIsError = true;
+        _resultMessage = 'Could not refresh the JWT. Check network '
+            'connectivity and that this unit is still registered.';
+      });
+      return;
+    }
+
+    // Auto-mirror the refreshed mq.json to the physical unit's cvmain
+    // config dir, same as _register() does — otherwise a refreshed token
+    // would sit locally until the directory below happened to get saved
+    // again. See mirrorToCvmainConfig's doc comment for why this is safe
+    // to call unconditionally (no-op if the directory isn't set).
+    final mirrorResult = await _service.mirrorToCvmainConfig();
+    if (!mounted) return;
     setState(() {
       _refreshingJwt = false;
-      _resultIsError = !ok;
-      _resultMessage = ok
+      _resultIsError = false;
+      _resultMessage = mirrorResult == null
           ? 'JWT refreshed — mq.json updated.'
-          : 'Could not refresh the JWT. Check network connectivity and '
-              'that this unit is still registered.';
+          : 'JWT refreshed — mq.json updated.\n\n$mirrorResult';
     });
   }
 
@@ -142,29 +160,25 @@ class _UnitRegistrationPageState extends State<UnitRegistrationPage>
     });
   }
 
+  // Saves the directory fields, then immediately re-mirrors auth.json/
+  // mq.json into the (possibly just-changed) cvmain directory — folding
+  // in what a separate "Mirror now" button used to do as its own manual
+  // step. Safe to call every time: mirrorToCvmainConfig is a no-op if the
+  // directory is blank or nothing's registered yet, and otherwise it's
+  // just a full-overwrite file copy, so re-running it after an unrelated
+  // field save is harmless.
   Future<void> _saveSyncSettings() async {
     await _config.setCvmainConfigDir(_cvmainDirController.text);
     await _config.setCvmasterConfigDir(_cvmasterDirController.text);
+    final mirrorResult = await _service.mirrorToCvmainConfig();
     if (!mounted) return;
     setState(() {
-      _syncSavedMessage = 'Saved.';
+      _syncSavedMessage = mirrorResult ?? 'Saved.';
     });
   }
 
-  Future<void> _mirrorNow() async {
-    await _saveSyncSettings();
-    setState(() => _mirroring = true);
-    final result = await _service.mirrorToCvmainConfig();
-    if (!mounted) return;
-    setState(() {
-      _mirroring = false;
-      _syncSavedMessage = result ??
-          'cvmain config directory is blank above — nothing to mirror.';
-    });
-  }
-
-  /// Confirms before doing anything — unlike "Mirror now"/"Forget", this
-  /// overwrites the physical unit's real `auth.json`/`mq.json` with the
+  /// Confirms before doing anything — unlike saving the directory or
+  /// "Forget", this overwrites the physical unit's real `auth.json`/`mq.json` with the
   /// "-reset" template files, which can't be undone from this app. Uses
   /// [_ResetConfirmDialog] (below) rather than a bare `AlertDialog` so this
   /// gets the same "X" close button + auto-dismiss every other admin
@@ -347,13 +361,15 @@ class _UnitRegistrationPageState extends State<UnitRegistrationPage>
                     'auth.json/mq.json — it does NOT make the physical '
                     'unit show "online" on VaultGroup by itself. This app '
                     'copies those files into cvmain\'s real config folder '
-                    'automatically after each registration (plain file '
-                    'copy, no special permissions needed) — the directory '
-                    'below is already set to this unit\'s confirmed path; '
-                    'only change it if you\'re pointing at a different '
-                    'unit, or clear it to skip mirroring entirely. cvmain\'s '
-                    'and cvmaster\'s config directories below are also what '
-                    'the cloud settings sync (see Configuration page) reads '
+                    'automatically — after registering, after a JWT '
+                    'refresh, and whenever the directory below is saved '
+                    '(plain file copy, no special permissions needed, no '
+                    'button to remember to press) — the directory below is '
+                    'already set to this unit\'s confirmed path; only '
+                    'change it if you\'re pointing at a different unit, or '
+                    'clear it to skip mirroring entirely. cvmain\'s and '
+                    'cvmaster\'s config directories below are also what the '
+                    'cloud settings sync (see Configuration page) reads '
                     'their native config from — no manual action needed '
                     'there, it pushes automatically on every change.',
                     style: AdminTextStyles.body,
@@ -394,43 +410,20 @@ class _UnitRegistrationPageState extends State<UnitRegistrationPage>
                       border: Border.all(color: AppColors.panelBorder),
                     ),
                     child: const Text(
-                      'After the files are copied, cvmain still needs a '
-                      'restart to actually pick them up — that\'s a manual '
-                      'step, on purpose. Over SSH:\n\n'
-                      '  sudo pkill -f cvmain_rs\n\n'
-                      'Its supervisor script relaunches it within a few '
-                      'seconds with the new credentials. Check '
+                      'After the files are copied, a separate process on '
+                      'the unit watches this directory and restarts '
+                      'cvmain on its own so it picks up the change — '
+                      'nothing further to do here. Check '
                       'cv/cvmain/logs/cvmain.log to confirm, then check '
                       'VaultGroup\'s dashboard.',
                       style: TextStyle(fontFamily: 'Metropolis', fontSize: 12, color: Colors.white70),
                     ),
                   ),
                   const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          style: AdminInputStyle.outlinedButton,
-                          onPressed: _mirroring ? null : _mirrorNow,
-                          icon: _mirroring
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.teal),
-                                )
-                              : const Icon(Icons.drive_file_move_outline),
-                          label: const Text('Mirror now'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: OutlinedButton(
-                          style: AdminInputStyle.outlinedButton,
-                          onPressed: _saveSyncSettings,
-                          child: const Text('Save directory'),
-                        ),
-                      ),
-                    ],
+                  OutlinedButton(
+                    style: AdminInputStyle.outlinedButton,
+                    onPressed: _saveSyncSettings,
+                    child: const Text('Save directory'),
                   ),
                   if (_syncSavedMessage != null) ...[
                     const SizedBox(height: 10),

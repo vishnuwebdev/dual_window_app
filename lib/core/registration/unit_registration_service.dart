@@ -203,16 +203,17 @@ class UnitRegistrationService extends ChangeNotifier {
   /// connection — the unit will never show online no matter how many
   /// times you register here, unless cvmain itself gets these files.
   ///
-  /// This only copies the files — it does **not** restart cvmain. cvmain
-  /// only re-reads its config on process start (confirmed from its
-  /// `run_cvmain.sh` supervisor script), so after this call succeeds you
-  /// still need to restart it yourself, e.g. over SSH:
-  /// ```
-  /// sudo pkill -f cvmain_rs
-  /// ```
-  /// Its supervisor loop relaunches it within a few seconds with the
-  /// files just written here. Deliberately manual, not automated by this
-  /// app — see the `ConfigService.cvmainConfigDir` doc comment.
+  /// This only copies the files — it does not itself restart cvmain.
+  /// cvmain only re-reads its config on process start, but a separate
+  /// process on the unit watches this directory and restarts cvmain
+  /// automatically once these files change, so this app doesn't need to
+  /// (and shouldn't) do that itself — see the `ConfigService.cvmainConfigDir`
+  /// doc comment.
+  ///
+  /// Called automatically — after a successful registration, after a JWT
+  /// refresh, and whenever the directory below is saved — rather than
+  /// gated behind a manual button, since it's a cheap, idempotent, safe
+  /// file copy (see each call site for why).
   ///
   /// Returns a human-readable status string for display, or `null` if
   /// skipped because [ConfigService.cvmainConfigDir] isn't set.
@@ -237,8 +238,7 @@ class UnitRegistrationService extends ChangeNotifier {
       await destMq.writeAsString(await _mqFile.readAsString());
 
       logger.i('Mirrored auth.json/mq.json to cvmain config dir: $dir');
-      return 'Copied auth.json/mq.json to $dir. cvmain still needs a '
-          'manual restart to pick them up (sudo pkill -f cvmain_rs over SSH).';
+      return 'Copied auth.json/mq.json to $dir.';
     } catch (e) {
       logger.w('Failed to mirror registration files to $dir: $e');
       return 'Could not write to "$dir" — check the path exists and this '
@@ -276,9 +276,13 @@ class UnitRegistrationService extends ChangeNotifier {
   /// or if either "-reset" template file isn't actually present there.
   ///
   /// Like [mirrorToCvmainConfig], this only writes files — it does **not**
-  /// restart cvmain, which still needs a manual restart
-  /// (`sudo pkill -f cvmain_rs` over SSH) to actually pick up the reset
-  /// files.
+  /// restart cvmain. Unlike a routine mirror (registration, JWT refresh,
+  /// or saving the directory — all auto-mirrored and auto-restarted by a
+  /// watcher process on the unit), a factory reset is a deliberate,
+  /// deregister-and-hand-off action a technician performs in person, and
+  /// the actual field process is: reset here, then the technician manually
+  /// restarts/reboots the unit as part of that same visit — so this stays
+  /// a manual step by design here, not automated.
   Future<String?> resetToFactoryDefaults() async {
     // Always clear this app's own local state first, regardless of
     // whether a cvmain directory is configured below — "Reset" should
@@ -314,8 +318,7 @@ class UnitRegistrationService extends ChangeNotifier {
       logger.i('Reset auth.json/mq.json to factory defaults in cvmain config dir: $dir');
       return 'Local registration cleared, and the unit\'s auth.json/mq.json '
           'were reset to their factory defaults in $dir. cvmain still '
-          'needs a manual restart to pick this up (sudo pkill -f '
-          'cvmain_rs over SSH).';
+          'needs a manual restart to pick this up.';
     } catch (e) {
       logger.w('Failed to reset auth.json/mq.json in $dir: $e');
       return 'Local registration cleared, but resetting the physical '

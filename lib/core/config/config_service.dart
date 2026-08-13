@@ -841,10 +841,11 @@ class ConfigService extends ChangeNotifier {
   /// *gRPC* server is (already required for any locker control); this is
   /// where cvmain's *own config files* live on that same machine's
   /// filesystem (only needed for the unit to show "online" in
-  /// VaultGroup — see the Unit Registration page). Restarting cvmain so
-  /// it actually picks up a freshly-mirrored file is a manual step done
-  /// over SSH (`sudo pkill -f cvmain_rs` — its supervisor script relaunches
-  /// it within a few seconds) — deliberately not automated by this app.
+  /// VaultGroup — see the Unit Registration page). This app only ever
+  /// copies `auth.json`/`mq.json` into this directory
+  /// (`UnitRegistrationService.mirrorToCvmainConfig`); a separate process
+  /// on the unit watches it and restarts cvmain so it picks up the new
+  /// files — this app doesn't do that itself.
   String get cvmainConfigDir => _cvmainConfigDir;
 
   Future<void> setCvmainConfigDir(String value) async {
