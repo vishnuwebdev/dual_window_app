@@ -28,14 +28,14 @@ CONFIGURATION (2 files)
 
 DOCUMENTATION (6 files)
   ✅ README.md                               - Project overview
-  ✅ QUICK_START.md                          - 5-minute setup guide
-  ✅ SETUP_GUIDE.md                          - Complete installation
-  ✅ INTEGRATION_NOTES.md                    - Integration details
-  ✅ PROJECT_SUMMARY.md                      - File listing
-  ✅ HANDOFF_COMPLETE.md                     - Next steps (read this!)
+  ✅ quick_start.md                          - 5-minute setup guide
+  ✅ setup_guide.md                          - Complete installation
+  ✅ integration_notes.md                    - Integration details
+  ✅ project_summary.md                      - File listing
+  ✅ handoff_complete.md                     - Next steps (read this!)
 
 THIS FILE
-  ✅ COMPLETION_REPORT.txt                   - Summary (you are here)
+  ✅ completion_report.txt                   - Summary (you are here)
 
 ================================================================================
                             CRITICAL NEXT STEP
@@ -99,12 +99,12 @@ CONFIGURATION
 
 DOCUMENTATION
   README.md                   280 lines
-  QUICK_START.md              150 lines
-  SETUP_GUIDE.md              320 lines
-  INTEGRATION_NOTES.md        350 lines
-  PROJECT_SUMMARY.md          400 lines
-  HANDOFF_COMPLETE.md         320 lines
-  COMPLETION_REPORT.txt       (this file)
+  quick_start.md              150 lines
+  setup_guide.md              320 lines
+  integration_notes.md        350 lines
+  project_summary.md          400 lines
+  handoff_complete.md         320 lines
+  completion_report.txt       (this file)
   ────────────────────────────────────────
   TOTAL DOCUMENTATION:       2,020 lines
 
@@ -188,7 +188,7 @@ SHORT-TERM (Today/This Week)
   5. Test all locker operations (open/close)
   6. Configure for your network (IP address)
   7. Verify physical door opens and closes
-  8. Read HANDOFF_COMPLETE.md for detailed next steps
+  8. Read handoff_complete.md for detailed next steps
 
 OPTIONAL (Future)
   9. Deploy to Raspberry Pi
@@ -201,19 +201,19 @@ OPTIONAL (Future)
 ================================================================================
 
 START HERE:
-  1. Read: HANDOFF_COMPLETE.md (quick next steps)
-  2. Read: QUICK_START.md (5-minute setup)
+  1. Read: handoff_complete.md (quick next steps)
+  2. Read: quick_start.md (5-minute setup)
 
 THEN:
   3. Read: README.md (project overview)
-  4. Read: SETUP_GUIDE.md (detailed installation)
+  4. Read: setup_guide.md (detailed installation)
 
 IF INTEGRATING WITH MOBILE APP:
-  5. Read: INTEGRATION_NOTES.md (how it works)
+  5. Read: integration_notes.md (how it works)
 
 FOR REFERENCE:
-  6. Read: PROJECT_SUMMARY.md (complete file listing)
-  7. Read: This file (COMPLETION_REPORT.txt)
+  6. Read: project_summary.md (complete file listing)
+  7. Read: This file (completion_report.txt)
 
 ================================================================================
                           TECHNOLOGY STACK
@@ -292,7 +292,7 @@ DOCKER DEPLOYMENT
   # Copy app
   # Build and run container
 
-See SETUP_GUIDE.md for detailed deployment instructions.
+See setup_guide.md for detailed deployment instructions.
 
 ================================================================================
                           SUPPORT & RESOURCES
@@ -302,7 +302,7 @@ IF YOU GET STUCK:
 
 1. Check the error message in the app UI
 2. Look at console output (shows emoji progress)
-3. Read SETUP_GUIDE.md → Troubleshooting section
+3. Read setup_guide.md → Troubleshooting section
 4. Verify protocol buffer files copied correctly
 5. Check network connectivity to locker backend
 
@@ -416,7 +416,7 @@ Status: READY FOR PRODUCTION USE
 Next Action: Execute the command to copy protocol buffer files
 (See "CRITICAL NEXT STEP" section above)
 
-Then: Read HANDOFF_COMPLETE.md for detailed next steps
+Then: Read handoff_complete.md for detailed next steps
 
 ================================================================================
 

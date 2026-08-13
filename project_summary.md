@@ -107,14 +107,14 @@
   - Quick links to guides
   - FAQ section
 
-- ✅ `QUICK_START.md` - 5-minute setup guide
+- ✅ `quick_start.md` - 5-minute setup guide
   - Prerequisites checklist
   - Step-by-step installation
   - First test procedure
   - Common commands
   - Troubleshooting quick fixes
 
-- ✅ `SETUP_GUIDE.md` - Complete installation guide
+- ✅ `setup_guide.md` - Complete installation guide
   - Project structure explanation
   - System requirements
   - Step-by-step installation
@@ -124,14 +124,14 @@
   - Architecture overview
   - Development notes
 
-- ✅ `INTEGRATION_NOTES.md` - Integration with cv-wep-frontend
+- ✅ `integration_notes.md` - Integration with cv-wep-frontend
   - Shared components explanation
   - Protocol buffer file copying
   - Testing the integration
   - Deployment considerations
   - Cross-project maintenance
 
-- ✅ `PROJECT_SUMMARY.md` - This file
+- ✅ `project_summary.md` - This file
   - Complete file listing
   - What was created
   - Next steps
@@ -188,10 +188,10 @@ cnc_dual_screen/
 ├── .gitignore                             ✅ Git configuration
 │
 ├── README.md                              ✅ Project overview
-├── QUICK_START.md                         ✅ 5-minute setup
-├── SETUP_GUIDE.md                         ✅ Complete guide
-├── INTEGRATION_NOTES.md                   ✅ cv-wep-frontend integration
-└── PROJECT_SUMMARY.md                     ✅ This file
+├── quick_start.md                         ✅ 5-minute setup
+├── setup_guide.md                         ✅ Complete guide
+├── integration_notes.md                   ✅ cv-wep-frontend integration
+└── project_summary.md                     ✅ This file
 ```
 
 ---
@@ -418,9 +418,9 @@ netstat -tuln | grep 50051  # Verify port listening
 
 ### Inside This Project
 - **README.md** - Overview and quick start
-- **SETUP_GUIDE.md** - Detailed setup
-- **QUICK_START.md** - 5-minute onboarding
-- **INTEGRATION_NOTES.md** - How it works
+- **setup_guide.md** - Detailed setup
+- **quick_start.md** - 5-minute onboarding
+- **integration_notes.md** - How it works
 
 ### External
 - [Flutter Docs](https://flutter.dev/docs)
@@ -484,16 +484,16 @@ netstat -tuln | grep 50051  # Verify port listening
 
 **Read First:**
 1. README.md
-2. QUICK_START.md
-3. SETUP_GUIDE.md
+2. quick_start.md
+3. setup_guide.md
 
 **Then:**
-4. INTEGRATION_NOTES.md
+4. integration_notes.md
 5. Check console output for error messages
 6. Review logging output (emoji indicators)
 
 **Common Issues:**
-See SETUP_GUIDE.md → Troubleshooting section
+See setup_guide.md → Troubleshooting section
 
 ---
 

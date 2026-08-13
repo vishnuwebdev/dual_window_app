@@ -5,7 +5,7 @@ import 'package:grpc/grpc.dart';
 import '../config/config_service.dart';
 import '../utilities/logging.dart';
 import '../utilities/phone_utils.dart';
-// Generated from protos/service.proto — see protos/CODEGEN.md for how to
+// Generated from protos/service.proto — see protos/codegen.md for how to
 // (re)produce these. `Empty` comes from protobuf's own bundled well-known
 // type rather than a locally-generated copy — the protoc_plugin version
 // this was generated with wires `service.pbgrpc.dart`'s own references to

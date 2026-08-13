@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(flutter analyze *)",
+      "Skill(run)",
+      "Skill(run:*)",
+      "Bash(find /Users/vishnusharma/project/Vault/cnc_dual_screen -maxdepth 3 -iname \"SKILL.md\" 2>/dev/null; find ~/.claude/skills -maxdepth 2 -iname \"SKILL.md\" 2>/dev/null | xargs grep -l \"multi-window\\\\|flutter\" 2>/dev/null)",
+      "Read(//Users/vishnusharma/.claude/**)",
+      "Bash(timeout 180 flutter build macos --debug)",
+      "Bash(brew list *)",
+      "Bash(ping -c1 -W2 8.8.8.8)",
+      "Bash(brew install *)",
+      "Bash(dart pub *)",
+      "Read(//Users/vishnusharma/.pub-cache/**)",
+      "Read(//Users/vishnusharma/.pub-cache/hosted/pub.dev/**)",
+      "Read(//opt/homebrew/Cellar/protobuf/**)",
+      "Read(//opt/homebrew/**)",
+      "Bash(flutter pub *)",
+      "Bash(curl -s \"https://pub.dev/packages/grpc/versions/5.1.0/CHANGELOG\" -o /tmp/grpc_changelog.html)",
+      "Bash(curl -s \"https://raw.githubusercontent.com/grpc/grpc-dart/master/pkgs/grpc/CHANGELOG.md\")",
+      "Bash(echo \"---exit $?\")",
+      "Bash(flutter config *)"
+    ]
+  }
+}

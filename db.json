@@ -3,12 +3,21 @@
     "phone": "+27123456789",
     "pin": "4631",
     "lockerId": 6,
+    "collectionLockerId": null,
     "creationDate": "2026-07-12T22:13:06.226134"
   },
   {
     "phone": "+27123456789",
     "pin": "4631",
     "lockerId": 4,
+    "collectionLockerId": null,
     "creationDate": "2026-07-12T22:30:31.408199"
+  },
+  {
+    "phone": "+27123456789",
+    "pin": "4631",
+    "lockerId": 5,
+    "collectionLockerId": 3,
+    "creationDate": "2026-07-29T08:38:41.723561"
   }
 ]

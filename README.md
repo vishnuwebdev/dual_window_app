@@ -17,9 +17,9 @@ A Flutter Desktop application for controlling physical lockers on Raspberry Pi 5
 
 ## Quick Links
 
-- 🚀 **[Quick Start](QUICK_START.md)** - Get running in 5 minutes
-- 📖 **[Setup Guide](SETUP_GUIDE.md)** - Complete installation guide
-- 🔗 **[Integration Notes](INTEGRATION_NOTES.md)** - How it works with cv-wep-frontend
+- 🚀 **[Quick Start](quick_start.md)** - Get running in 5 minutes
+- 📖 **[Setup Guide](setup_guide.md)** - Complete installation guide
+- 🔗 **[Integration Notes](integration_notes.md)** - How it works with cv-wep-frontend
 
 ## Features
 
@@ -125,7 +125,7 @@ lib/
 
 ### Full Setup
 
-See [SETUP_GUIDE.md](SETUP_GUIDE.md) for:
+See [setup_guide.md](setup_guide.md) for:
 - Complete installation
 - Raspberry Pi deployment
 - Desktop environment setup
@@ -395,9 +395,9 @@ TBD
 ## Support
 
 ### Documentation
-- 📖 [Setup Guide](SETUP_GUIDE.md)
-- ⚡ [Quick Start](QUICK_START.md)
-- 🔗 [Integration Notes](INTEGRATION_NOTES.md)
+- 📖 [Setup Guide](setup_guide.md)
+- ⚡ [Quick Start](quick_start.md)
+- 🔗 [Integration Notes](integration_notes.md)
 
 ### Resources
 - [Flutter Docs](https://flutter.dev/docs)

@@ -33,7 +33,7 @@ build/
 # Generated files (build_runner-style codegen, if this project ever adds
 # any — NOT the protoc/gRPC output in lib/generated/, which must ship
 # with the repo since not every build machine has protoc installed; see
-# protos/CODEGEN.md and the negation at the bottom of this file). Prior
+# protos/codegen.md and the negation at the bottom of this file). Prior
 # versions of this file ignored *.pb.dart/*.pbgrpc.dart/*.pbjson.dart
 # globally, which silently excluded 3 of the 4 files
 # locker_grpc_service.dart needs, causing "No such file or directory" on
@@ -91,7 +91,7 @@ coverage/
 .nyc_output/
 
 # Keep essential files — the protoc/gRPC client output (see
-# protos/CODEGEN.md) ships with the repo rather than being regenerated on
+# protos/codegen.md) ships with the repo rather than being regenerated on
 # every machine.
 !lib/generated/
 !lib/generated/*.dart

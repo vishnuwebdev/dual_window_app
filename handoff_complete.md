@@ -76,11 +76,11 @@ A complete **Flutter Desktop application** for controlling physical lockers via 
 ### 7. **Complete Documentation**
 ```
 ✅ README.md - Project overview
-✅ QUICK_START.md - 5-minute setup
-✅ SETUP_GUIDE.md - Detailed installation
-✅ INTEGRATION_NOTES.md - How it works with cv-wep-frontend
-✅ PROJECT_SUMMARY.md - Comprehensive file listing
-✅ HANDOFF_COMPLETE.md - This file
+✅ quick_start.md - 5-minute setup
+✅ setup_guide.md - Detailed installation
+✅ integration_notes.md - How it works with cv-wep-frontend
+✅ project_summary.md - Comprehensive file listing
+✅ handoff_complete.md - This file
 ```
 
 ---
@@ -152,11 +152,11 @@ flutter run
 ### Documentation
 ```
 ✅ README.md (200+ lines)
-✅ QUICK_START.md (100+ lines)
-✅ SETUP_GUIDE.md (200+ lines)
-✅ INTEGRATION_NOTES.md (250+ lines)
-✅ PROJECT_SUMMARY.md (300+ lines)
-✅ HANDOFF_COMPLETE.md (this file)
+✅ quick_start.md (100+ lines)
+✅ setup_guide.md (200+ lines)
+✅ integration_notes.md (250+ lines)
+✅ project_summary.md (300+ lines)
+✅ handoff_complete.md (this file)
 ```
 
 ---
@@ -353,18 +353,18 @@ flutter run -v  # verbose output
 | File | Purpose | Read Time |
 |------|---------|-----------|
 | README.md | Overview & features | 10 min |
-| QUICK_START.md | 5-minute setup | 5 min |
-| SETUP_GUIDE.md | Complete installation | 20 min |
-| INTEGRATION_NOTES.md | How it works | 15 min |
-| PROJECT_SUMMARY.md | File listing & details | 15 min |
-| HANDOFF_COMPLETE.md | This file | 10 min |
+| quick_start.md | 5-minute setup | 5 min |
+| setup_guide.md | Complete installation | 20 min |
+| integration_notes.md | How it works | 15 min |
+| project_summary.md | File listing & details | 15 min |
+| handoff_complete.md | This file | 10 min |
 
 **Recommended Reading Order:**
-1. HANDOFF_COMPLETE.md (you are here)
-2. QUICK_START.md
+1. handoff_complete.md (you are here)
+2. quick_start.md
 3. README.md
-4. SETUP_GUIDE.md (as needed)
-5. INTEGRATION_NOTES.md (if integrating with cv-wep-frontend)
+4. setup_guide.md (as needed)
+5. integration_notes.md (if integrating with cv-wep-frontend)
 
 ---
 
@@ -442,7 +442,7 @@ You'll know it's working when:
 **If stuck:**
 1. Check error message in app
 2. Look at console logs (has emojis)
-3. Read SETUP_GUIDE.md troubleshooting
+3. Read setup_guide.md troubleshooting
 4. Check protocol buffer files copied
 5. Verify network connectivity
 
@@ -460,12 +460,12 @@ You'll know it's working when:
 
 | Need | File | Section |
 |------|------|---------|
-| Get started fast | QUICK_START.md | 5-minute setup |
-| Install properly | SETUP_GUIDE.md | Installation |
-| Understand code | INTEGRATION_NOTES.md | Architecture |
-| Find a file | PROJECT_SUMMARY.md | File listing |
-| Solve problem | SETUP_GUIDE.md | Troubleshooting |
-| Deploy to RPi | SETUP_GUIDE.md | Raspberry Pi |
+| Get started fast | quick_start.md | 5-minute setup |
+| Install properly | setup_guide.md | Installation |
+| Understand code | integration_notes.md | Architecture |
+| Find a file | project_summary.md | File listing |
+| Solve problem | setup_guide.md | Troubleshooting |
+| Deploy to RPi | setup_guide.md | Raspberry Pi |
 
 ---
 
@@ -482,7 +482,7 @@ Before considering "done":
 - [ ] Configuration persists
 - [ ] Logs show emojis
 - [ ] Read README.md
-- [ ] Read QUICK_START.md
+- [ ] Read quick_start.md
 
 ---
 

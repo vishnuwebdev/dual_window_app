@@ -13,7 +13,7 @@ package cv_saas;
 // ever drift, regenerate this file from the Android source rather than
 // hand-editing it here.
 //
-// See CODEGEN.md in this directory for how to turn this into the Dart
+// See codegen.md in this directory for how to turn this into the Dart
 // client used by lib/core/grpc/locker_grpc_service.dart.
 
 message BasicResponse {

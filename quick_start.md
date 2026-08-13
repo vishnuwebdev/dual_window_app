@@ -79,7 +79,7 @@ In app:
 ├── lib/core/utilities/logging.dart       # Logging
 ├── lib/screens/locker_control_screen.dart # Main UI
 ├── pubspec.yaml                          # Dependencies
-└── SETUP_GUIDE.md                        # Full setup guide
+└── setup_guide.md                        # Full setup guide
 
 ⏳ You Need to Add:
 └── lib/core/generated/
@@ -171,8 +171,8 @@ ls -la lib/core/generated/
 1. ✅ Complete 5-minute setup above
 2. ✅ Test backend connectivity (check status)
 3. ✅ Test locker operations (open/close)
-4. ✅ Read SETUP_GUIDE.md for deployment
-5. ✅ Read INTEGRATION_NOTES.md for details
+4. ✅ Read setup_guide.md for deployment
+5. ✅ Read integration_notes.md for details
 
 ---
 

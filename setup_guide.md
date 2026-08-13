@@ -29,8 +29,8 @@ cnc_dual_screen/
 │   │   └── locker_control_screen.dart # Main UI screen
 │   └── main.dart                      # App entry point
 ├── pubspec.yaml                       # Dependencies
-├── SETUP_GUIDE.md                     # This file
-└── INTEGRATION_NOTES.md               # Integration details
+├── setup_guide.md                     # This file
+└── integration_notes.md               # Integration details
 ```
 
 ## Prerequisites
