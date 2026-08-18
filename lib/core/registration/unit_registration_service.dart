@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../config/config_service.dart';
+import '../utilities/app_paths.dart';
 import '../utilities/logging.dart';
 import 'mqtt_sync_service.dart';
 
@@ -27,8 +28,8 @@ import 'mqtt_sync_service.dart';
 /// under cvmain's own `/cv/config/` directory, because cvmain itself
 /// (native code, not the Kotlin app) is what opens the MQTT session. This
 /// desktop port keeps its own copies next to `config.json`/`db.json`
-/// (`Directory.current.path`) instead — self-contained, and works whether
-/// or not a real cvmain is even installed on the machine. If a real
+/// instead — see `AppPaths` — self-contained, and works whether or not a
+/// real cvmain is even installed on the machine. If a real
 /// physical unit's cvmain is already registered separately, register this
 /// app with its *own* registration code from the platform rather than
 /// reusing the same one, if both are meant to appear as distinct entries
@@ -41,8 +42,8 @@ class UnitRegistrationService extends ChangeNotifier {
 
   static const _baseUrl = 'https://saas.vaultgroup-cloud.com';
 
-  File get _authFile => File('${Directory.current.path}/auth.json');
-  File get _mqFile => File('${Directory.current.path}/mq.json');
+  File get _authFile => AppPaths.authFile;
+  File get _mqFile => AppPaths.mqFile;
 
   bool _isRegistered = false;
   String? _username;
@@ -104,6 +105,7 @@ class UnitRegistrationService extends ChangeNotifier {
         return 'Registration response did not include a username.';
       }
 
+      await AppPaths.ensureDirectoryExists();
       await _authFile.writeAsString(
         const JsonEncoder.withIndent('  ').convert(body),
       );
@@ -166,6 +168,7 @@ class UnitRegistrationService extends ChangeNotifier {
       final body = jsonDecode(response.body) as Map<String, dynamic>;
       final token = body['token'] as String? ?? '';
 
+      await AppPaths.ensureDirectoryExists();
       await _mqFile.writeAsString(
         const JsonEncoder.withIndent('  ').convert({
           'server_uri': 'tcp://ws-saas.vaultgroup-cloud.com:1883',

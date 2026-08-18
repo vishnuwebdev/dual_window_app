@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
 
+import '../utilities/app_paths.dart';
 import '../utilities/logging.dart';
 import 'settings_sync_service.dart';
 
@@ -55,7 +56,7 @@ class MqttSyncService extends ChangeNotifier {
   MqttServerClient? _client;
   bool _connecting = false;
 
-  File get _mqFile => File('${Directory.current.path}/mq.json');
+  File get _mqFile => AppPaths.mqFile;
 
   String _status = 'Not started';
   String get status => _status;

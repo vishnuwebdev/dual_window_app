@@ -1,12 +1,21 @@
-# Local runtime config — admin-editable settings (admin PIN, drop-off PIN,
-# SMS template, locker mapping), created with defaults by ConfigService on
-# first launch. Mirrors the Android app's on-device `admin.json`.
+# Local runtime state — config.json, db.json, auth.json, mq.json — all
+# live together under config/ (see `AppPaths`, lib/core/utilities/
+# app_paths.dart). config.json is admin-editable settings (admin PIN,
+# drop-off PIN, SMS template, locker mapping), created with defaults by
+# ConfigService on first launch; mirrors the Android app's on-device
+# `admin.json`. db.json is parcel drop-off/collection records, created
+# (empty) by MockKioskRepository on first launch; mirrors the Android
+# app's on-device `db.json`. auth.json/mq.json hold this unit's
+# VaultGroup registration credentials and MQTT JWT (see
+# UnitRegistrationService) — these were previously tracked in git
+# unintentionally (no ignore rule existed for them before this line was
+# added); if that matters for this repo, the exposed credentials in git
+# history should be rotated and the history scrubbed, since ignoring them
+# going forward does not remove what's already committed.
 config.json
-
-# Local runtime data — parcel drop-off/collection records, created (empty)
-# by MockKioskRepository on first launch. Mirrors the Android app's
-# on-device `db.json`.
 db.json
+auth.json
+mq.json
 
 # Flutter build directories
 build/

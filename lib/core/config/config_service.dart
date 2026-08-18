@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import '../utilities/app_paths.dart';
 import '../utilities/logging.dart';
 
 /// One physical locker slot's id + size, as stored in `config.json`'s
@@ -247,16 +248,16 @@ class ConfigService extends ChangeNotifier {
     return _instance;
   }
 
-  File get _configFile => File('${Directory.current.path}/config.json');
+  File get _configFile => AppPaths.configFile;
 
   /// Initialize ConfigService (call this in main.dart)
   Future<void> initialize() async {
     if (_initialized) return;
 
-    // `_configFile` resolves relative to `Directory.current.path` — log it
-    // once so a silently-swallowed write failure (e.g. this path being
-    // outside what the OS lets the app write to) is easy to spot in the
-    // console instead of just missing from config.json.
+    // `_configFile` resolves via `AppPaths` — log it once so a
+    // silently-swallowed write failure (e.g. this path being outside what
+    // the OS lets the app write to) is easy to spot in the console instead
+    // of just missing from config.json.
     logger.i('ConfigService: reading/writing ${_configFile.path}');
 
     await _loadConfigFile();
@@ -426,6 +427,7 @@ class ConfigService extends ChangeNotifier {
   }
 
   Future<void> _persistConfig() async {
+    await AppPaths.ensureDirectoryExists();
     await _configFile.writeAsString(const JsonEncoder.withIndent('  ').convert({
       _kAdminPin: _adminPin,
       _kDropOffPin: _dropOffPin,

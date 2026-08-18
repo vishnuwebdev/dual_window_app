@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import '../config/config_service.dart';
 import '../mock/mock_kiosk_repository.dart';
+import '../utilities/app_paths.dart';
 import '../utilities/logging.dart';
 
 /// Result of a [SettingsSyncService] push — kept as a tiny value type
@@ -62,7 +63,7 @@ class SettingsSyncService {
   static const _baseUrl = 'https://saas.vaultgroup-cloud.com';
   static const _timeout = Duration(seconds: 20);
 
-  File get _mqFile => File('${Directory.current.path}/mq.json');
+  File get _mqFile => AppPaths.mqFile;
 
   Future<String?> _readJwt() async {
     try {

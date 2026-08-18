@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 
 import '../config/config_service.dart';
 import '../grpc/locker_grpc_service.dart';
+import '../utilities/app_paths.dart';
 import '../utilities/logging.dart';
 import '../utilities/phone_utils.dart';
 import 'models.dart';
@@ -151,7 +152,7 @@ class MockKioskRepository extends ChangeNotifier {
   /// `config.json` — see `core/config/config_service.dart`.
   bool dropoffPinEnabled = false;
 
-  File get _dbFile => File('${Directory.current.path}/db.json');
+  File get _dbFile => AppPaths.dbFile;
 
   /// Loads `db.json` (if present) into memory; creates it (empty) if it
   /// doesn't exist yet. Call once at startup, before any page reads or
@@ -160,10 +161,10 @@ class MockKioskRepository extends ChangeNotifier {
   Future<void> initialize() async {
     if (_initialized) return;
 
-    // `_dbFile` resolves relative to `Directory.current.path` — log it once
-    // so a silently-swallowed write failure (e.g. this path being outside
-    // what the OS lets the app write to) is easy to spot in the console
-    // instead of just missing from db.json.
+    // `_dbFile` resolves via `AppPaths` — log it once so a
+    // silently-swallowed write failure (e.g. this path being outside what
+    // the OS lets the app write to) is easy to spot in the console instead
+    // of just missing from db.json.
     logger.i('MockKioskRepository: reading/writing ${_dbFile.path}');
 
     await _loadItemsFromDisk();
@@ -303,6 +304,7 @@ class MockKioskRepository extends ChangeNotifier {
 
   Future<void> _writeItemsToDisk() async {
     try {
+      await AppPaths.ensureDirectoryExists();
       await _dbFile.writeAsString(
         const JsonEncoder.withIndent('  ')
             .convert(_items.map(_itemToJson).toList()),
