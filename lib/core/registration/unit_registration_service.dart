@@ -168,7 +168,7 @@ class UnitRegistrationService extends ChangeNotifier {
       final body = jsonDecode(response.body) as Map<String, dynamic>;
       final token = body['token'] as String? ?? '';
 
-      await AppPaths.ensureDirectoryExists();
+      await AppPaths.ensureMqDirectoryExists();
       await _mqFile.writeAsString(
         const JsonEncoder.withIndent('  ').convert({
           'server_uri': 'tcp://ws-saas.vaultgroup-cloud.com:1883',
