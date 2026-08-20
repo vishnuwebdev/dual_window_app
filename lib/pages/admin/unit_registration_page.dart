@@ -43,6 +43,18 @@ class UnitRegistrationPage extends StatefulWidget {
 
 class _UnitRegistrationPageState extends State<UnitRegistrationPage>
     with InactivityTimerMixin {
+  // UI-only toggle — hides the "Physical unit sync" card (cvmain/cvmaster
+  // directory fields + "Save directory" button) from this page without
+  // touching the underlying behavior: `_register()`/`_refreshJwt()`/
+  // `_service.mirrorToCvmainConfig()` all read `ConfigService().
+  // cvmainConfigDir`/`cvmasterConfigDir` directly (not from
+  // `_cvmainDirController`/`_cvmasterDirController`), and those already
+  // default to this unit's confirmed path — so mirroring after register/
+  // refresh keeps working exactly as before with this section hidden; the
+  // only thing lost is the ability to view/edit those two directory paths
+  // from this screen (still editable directly in config.json if ever
+  // needed). Flip back to `true` to restore the card.
+  static const bool _showPhysicalUnitSyncSection = false;
   // This page had no idle timeout at all before (2026-07-25 — see the
   // admin-section inactivity-timer audit) — it's reached from
   // AdminMenuPage like every other admin screen, so it gets the same
@@ -349,6 +361,7 @@ class _UnitRegistrationPageState extends State<UnitRegistrationPage>
                 ),
               ),
             ],
+            if (_showPhysicalUnitSyncSection) ...[
             const SizedBox(height: 24),
             AdminSectionCard(
               child: Column(
@@ -435,6 +448,7 @@ class _UnitRegistrationPageState extends State<UnitRegistrationPage>
                 ],
               ),
             ),
+            ],
             const SizedBox(height: 16),
             AdminSectionCard(
               child: Column(
