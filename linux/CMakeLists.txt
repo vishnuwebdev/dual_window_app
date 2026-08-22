@@ -126,3 +126,20 @@ if(NOT CMAKE_BUILD_TYPE MATCHES "Debug")
   install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
     COMPONENT Runtime)
 endif()
+
+# --- Project-specific addition (not part of the stock Flutter template) ---
+# Bundles this repo's top-level scripts/ folder (copy_to_cvmain.sh,
+# reset_cvmain.sh — shelled out to by UnitRegistrationService.
+# mirrorToCvmainConfig/resetToFactoryDefaults to work around cvmain's
+# config directory being root-owned) into the release bundle itself, as
+# <bundle>/scripts/... This repo's deploy process only ever copies the
+# built bundle/ folder to a unit, never the rest of the source tree, so
+# without this, those two scripts would never actually reach a deployed
+# unit — see AppPaths.scriptsDirectory's doc comment for why the Dart
+# side resolves this from the running executable's own location rather
+# than `Directory.current.path`, so it lines up correctly here regardless
+# of what directory the launcher `cd`s into before running the app.
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../scripts"
+  DESTINATION "${CMAKE_INSTALL_PREFIX}"
+  USE_SOURCE_PERMISSIONS
+  COMPONENT Runtime)

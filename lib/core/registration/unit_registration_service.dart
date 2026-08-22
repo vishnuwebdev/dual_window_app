@@ -231,15 +231,19 @@ class UnitRegistrationService extends ChangeNotifier {
   /// `MqttSyncService`'s/`SettingsSyncService`'s doc comments), so moving
   /// them away here would silently break all of that on the very next use.
   ///
-  /// IMPORTANT: the script hardcodes both the source
-  /// (`/home/pi/cv/cnc_dual_screen/config/...`) and destination
-  /// (`/home/pi/cv/cvmain/config/...`) paths rather than reading them from
-  /// [_authFile]/[_mqFile]/[dir] here. [dir] below is only used as an
-  /// on/off gate (empty = mirroring disabled) and in the status
-  /// messages — if this unit's install path or [ConfigService.
-  /// cvmainConfigDir] is ever changed away from those two hardcoded
-  /// defaults, the script needs updating to match; it will silently keep
-  /// copying to the old hardcoded location otherwise.
+  /// IMPORTANT: this is about the script's *contents*, not where the
+  /// script file itself lives — [AppPaths.copyToCvmainScript] finds the
+  /// file correctly no matter where the bundle is launched from (see its
+  /// doc comment). But the copy commands *inside* that file hardcode both
+  /// the source (`/home/pi/cv/cnc_dual_screen/config/...`) and
+  /// destination (`/home/pi/cv/cvmain/config/...`) paths as plain text,
+  /// rather than reading them from [_authFile]/[_mqFile]/[dir] here.
+  /// [dir] below is only used as an on/off gate (empty = mirroring
+  /// disabled) and in the status messages — if this unit's install path
+  /// or [ConfigService.cvmainConfigDir] is ever changed away from those
+  /// two hardcoded defaults, the script's own contents need updating to
+  /// match; it will silently keep copying to the old hardcoded location
+  /// otherwise.
   ///
   /// Returns a human-readable status string for display, or `null` if
   /// skipped because [ConfigService.cvmainConfigDir] isn't set.
@@ -252,8 +256,8 @@ class UnitRegistrationService extends ChangeNotifier {
         return 'Register the unit first — no local auth.json/mq.json to mirror yet.';
       }
 
-      final scriptPath = '${Directory.current.path}/scripts/copy_to_cvmain.sh';
-      final result = await Process.run('bash', [scriptPath]);
+      final result =
+          await Process.run('bash', [AppPaths.copyToCvmainScript.path]);
 
       if (result.exitCode != 0) {
         final stderr = (result.stderr as String).trim();
@@ -340,8 +344,8 @@ class UnitRegistrationService extends ChangeNotifier {
             'unit\'s files were left untouched.';
       }
 
-      final scriptPath = '${Directory.current.path}/scripts/reset_cvmain.sh';
-      final result = await Process.run('bash', [scriptPath]);
+      final result =
+          await Process.run('bash', [AppPaths.resetCvmainScript.path]);
 
       if (result.exitCode != 0) {
         final stderr = (result.stderr as String).trim();

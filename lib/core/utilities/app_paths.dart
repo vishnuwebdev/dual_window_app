@@ -63,4 +63,33 @@ class AppPaths {
       await mqDirectory.create(recursive: true);
     }
   }
+
+  /// The directory this app's own compiled executable is running from —
+  /// `<bundle>` for a release build (see `linux/CMakeLists.txt`'s
+  /// project-specific `scripts/` install rule, which copies
+  /// `copy_to_cvmain.sh`/`reset_cvmain.sh` in here as `<this>/scripts/...`
+  /// on every `flutter build linux`).
+  ///
+  /// Deliberately resolved from [Platform.resolvedExecutable] rather than
+  /// `Directory.current.path` (unlike [directory] above, which is
+  /// correctly install-dir-relative) — this repo's deploy process copies
+  /// only the built `bundle/` folder to a unit, and that folder can be
+  /// launched from a `cd` into itself or from a `cd` into some parent
+  /// directory first (this repo's history has done both at different
+  /// times), so `Directory.current.path` isn't a reliable way to find
+  /// something that lives *inside* the bundle. The executable's own
+  /// location, on the other hand, is fixed relative to the rest of the
+  /// bundle no matter how it's launched — `scripts/` installed as a
+  /// sibling of the executable will always be at
+  /// `<executable's own directory>/scripts/...`.
+  static Directory get executableDirectory =>
+      File(Platform.resolvedExecutable).parent;
+
+  static Directory get scriptsDirectory =>
+      Directory('${executableDirectory.path}/scripts');
+
+  static File get copyToCvmainScript =>
+      File('${scriptsDirectory.path}/copy_to_cvmain.sh');
+  static File get resetCvmainScript =>
+      File('${scriptsDirectory.path}/reset_cvmain.sh');
 }
