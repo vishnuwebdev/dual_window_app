@@ -218,6 +218,29 @@ class UnitRegistrationService extends ChangeNotifier {
   /// gated behind a manual button, since it's a cheap, idempotent, safe
   /// file copy (see each call site for why).
   ///
+  /// Runs `scripts/copy_to_cvmain.sh` via `sudo` rather than writing the
+  /// destination files directly from Dart: this app runs as `pi`, but
+  /// cvmain's real config directory on the unit is root-owned, so a plain
+  /// `File.writeAsString()` here fails with a permission error. The
+  /// script gets around that with a `NOPASSWD` sudoers rule scoped to it
+  /// on the unit (confirmed already set up — without that, every call
+  /// here fails). See the script's own comment for why it's `cp`, not
+  /// `mv` — this app keeps reading its own local `auth.json`/`mq.json`
+  /// afterward (every startup, every "Refresh JWT", every MQTT
+  /// connect/reconnect, every automatic cloud push — see this class's and
+  /// `MqttSyncService`'s/`SettingsSyncService`'s doc comments), so moving
+  /// them away here would silently break all of that on the very next use.
+  ///
+  /// IMPORTANT: the script hardcodes both the source
+  /// (`/home/pi/cv/cnc_dual_screen/config/...`) and destination
+  /// (`/home/pi/cv/cvmain/config/...`) paths rather than reading them from
+  /// [_authFile]/[_mqFile]/[dir] here. [dir] below is only used as an
+  /// on/off gate (empty = mirroring disabled) and in the status
+  /// messages — if this unit's install path or [ConfigService.
+  /// cvmainConfigDir] is ever changed away from those two hardcoded
+  /// defaults, the script needs updating to match; it will silently keep
+  /// copying to the old hardcoded location otherwise.
+  ///
   /// Returns a human-readable status string for display, or `null` if
   /// skipped because [ConfigService.cvmainConfigDir] isn't set.
   Future<String?> mirrorToCvmainConfig() async {
@@ -229,23 +252,24 @@ class UnitRegistrationService extends ChangeNotifier {
         return 'Register the unit first — no local auth.json/mq.json to mirror yet.';
       }
 
-      final destAuth = File('$dir/auth.json');
-      await destAuth.parent.create(recursive: true);
-      await destAuth.writeAsString(await _authFile.readAsString());
+      final scriptPath = '${Directory.current.path}/scripts/copy_to_cvmain.sh';
+      final result = await Process.run('bash', [scriptPath]);
 
-      // Confirmed layout on a real unit: mq.json lives in an `mq`
-      // subdirectory, not flat alongside auth.json — see
-      // `ConfigService.cvmainConfigDir`'s doc comment.
-      final destMq = File('$dir/mq/mq.json');
-      await destMq.parent.create(recursive: true);
-      await destMq.writeAsString(await _mqFile.readAsString());
+      if (result.exitCode != 0) {
+        final stderr = (result.stderr as String).trim();
+        logger.w(
+          'copy_to_cvmain.sh failed (exit ${result.exitCode}): $stderr',
+        );
+        return 'Could not copy auth.json/mq.json to $dir via '
+            'copy_to_cvmain.sh (exit ${result.exitCode})'
+            '${stderr.isEmpty ? '' : ': $stderr'}';
+      }
 
-      logger.i('Mirrored auth.json/mq.json to cvmain config dir: $dir');
+      logger.i('Mirrored auth.json/mq.json to cvmain config dir via copy_to_cvmain.sh: $dir');
       return 'Copied auth.json/mq.json to $dir.';
     } catch (e) {
-      logger.w('Failed to mirror registration files to $dir: $e');
-      return 'Could not write to "$dir" — check the path exists and this '
-          'app has permission to write there. ($e)';
+      logger.w('Failed to run copy_to_cvmain.sh: $e');
+      return 'Could not run copy_to_cvmain.sh: $e';
     }
   }
 
@@ -286,6 +310,13 @@ class UnitRegistrationService extends ChangeNotifier {
   /// the actual field process is: reset here, then the technician manually
   /// restarts/reboots the unit as part of that same visit — so this stays
   /// a manual step by design here, not automated.
+  ///
+  /// Like [mirrorToCvmainConfig], the actual overwrite of cvmain's
+  /// `auth.json`/`mq/mq.json` runs via `scripts/reset_cvmain.sh` (sudo)
+  /// rather than a direct Dart write — same root-owned-directory
+  /// permission problem, same fix. See that script's doc comment: it
+  /// needs its own `NOPASSWD` sudoers entry on the unit, separate from
+  /// `copy_to_cvmain.sh`'s.
   Future<String?> resetToFactoryDefaults() async {
     // Always clear this app's own local state first, regardless of
     // whether a cvmain directory is configured below — "Reset" should
@@ -309,16 +340,20 @@ class UnitRegistrationService extends ChangeNotifier {
             'unit\'s files were left untouched.';
       }
 
-      final destAuth = File('$dir/auth.json');
-      await destAuth.parent.create(recursive: true);
-      await destAuth.writeAsString(await authReset.readAsString());
+      final scriptPath = '${Directory.current.path}/scripts/reset_cvmain.sh';
+      final result = await Process.run('bash', [scriptPath]);
 
-      // Same `mq/` subdirectory layout as `mirrorToCvmainConfig`.
-      final destMq = File('$dir/mq/mq.json');
-      await destMq.parent.create(recursive: true);
-      await destMq.writeAsString(await mqReset.readAsString());
+      if (result.exitCode != 0) {
+        final stderr = (result.stderr as String).trim();
+        logger.w(
+          'reset_cvmain.sh failed (exit ${result.exitCode}): $stderr',
+        );
+        return 'Local registration cleared, but resetting the physical '
+            'unit\'s files via reset_cvmain.sh failed (exit '
+            '${result.exitCode})${stderr.isEmpty ? '' : ': $stderr'}';
+      }
 
-      logger.i('Reset auth.json/mq.json to factory defaults in cvmain config dir: $dir');
+      logger.i('Reset auth.json/mq.json to factory defaults in cvmain config dir via reset_cvmain.sh: $dir');
       return 'Local registration cleared, and the unit\'s auth.json/mq.json '
           'were reset to their factory defaults in $dir. cvmain still '
           'needs a manual restart to pick this up.';
