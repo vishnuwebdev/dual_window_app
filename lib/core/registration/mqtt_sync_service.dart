@@ -56,6 +56,19 @@ class MqttSyncService extends ChangeNotifier {
   MqttServerClient? _client;
   bool _connecting = false;
 
+  /// The subscription created by `client.updates!.listen(_onMessage)` in
+  /// [start] — tracked explicitly so [_disconnectQuietly] can cancel it
+  /// itself rather than relying on `client.disconnect()` to tear down the
+  /// stream as a side effect. `start()` is called again on every
+  /// "Refresh JWT" (see its doc comment), each time creating a brand new
+  /// client and a brand new `.listen()` call; without an explicit cancel
+  /// here, a `disconnect()` that doesn't fully close the underlying
+  /// stream/socket (a thrown/swallowed exception, or a package quirk)
+  /// would leave the previous subscription — and whatever it's holding
+  /// onto — dangling instead of released on every reconnect.
+  StreamSubscription<List<MqttReceivedMessage<MqttMessage>>>?
+      _updatesSubscription;
+
   File get _mqFile => AppPaths.mqFile;
 
   String _status = 'Not started';
@@ -147,7 +160,7 @@ class MqttSyncService extends ChangeNotifier {
       final topicFilter =
           _subscribeTopicFromJwt(password) ?? 's2u/$username/#';
       client.subscribe(topicFilter, MqttQos.atLeastOnce);
-      client.updates!.listen(_onMessage);
+      _updatesSubscription = client.updates!.listen(_onMessage);
       logger.i('MqttSyncService: subscribed to "$topicFilter".');
     } catch (e) {
       _setStatus('start() failed: $e');
@@ -206,6 +219,18 @@ class MqttSyncService extends ChangeNotifier {
   }
 
   Future<void> _disconnectQuietly() async {
+    // Cancel the update-stream subscription explicitly rather than
+    // relying on `client.disconnect()` below to close it as a side
+    // effect — see [_updatesSubscription]'s doc comment for why. Done
+    // first, and independently try/caught, so a throw from `disconnect()`
+    // below can never skip this.
+    try {
+      await _updatesSubscription?.cancel();
+    } catch (_) {
+      // Best-effort, same reasoning as the `disconnect()` catch below.
+    }
+    _updatesSubscription = null;
+
     try {
       _client?.disconnect();
     } catch (_) {

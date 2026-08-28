@@ -42,6 +42,25 @@ class AppPaths {
   static File get authFile => File('${directory.path}/auth.json');
   static File get mqFile => File('${mqDirectory.path}/mq.json');
 
+  /// Five of `config.json`'s eleven settings now live in their own files
+  /// instead — admin PIN, drop-off PIN, and SMS template as plain text
+  /// (just the raw value, no JSON wrapping), locker sizes and locker pair
+  /// mapping as their own JSON files (each holding the same array that
+  /// used to sit under `config.json`'s `locker_mapping`/
+  /// `locker_pair_mappings` key, now at the file's top level instead of
+  /// nested under a key). The other six settings (locker address/backend,
+  /// kiosk mode, cvmain/cvmaster config dirs, paired locker mode) stay in
+  /// `config.json` — see `ConfigService` for the full read/write/migration
+  /// logic; these five are plain siblings of `config.json` in [directory],
+  /// not nested like `mq.json` is.
+  static File get adminPwFile => File('${directory.path}/admin_pw');
+  static File get dropoffPinFile => File('${directory.path}/dropoff_pin');
+  static File get smsTemplateFile => File('${directory.path}/sms_template');
+  static File get lockerSizesFile =>
+      File('${directory.path}/locker_sizes.json');
+  static File get lockerPairMappingFile =>
+      File('${directory.path}/locker_pair_mapping.json');
+
   /// Creates [directory] if it doesn't already exist. Call this before any
   /// write against `config.json`/`db.json`/`auth.json` — a fresh install
   /// has no `config/` folder yet, and `File.writeAsString` fails outright

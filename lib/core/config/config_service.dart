@@ -112,23 +112,41 @@ class LockerPairMapping {
 }
 
 /// Single source of truth for every setting admins can change from the
-/// Admin menu, backed by a local `config.json` next to the app (mirroring
-/// how the Android app kept `admin.json` / `lockerConfig.json` on-device
-/// rather than bundled).
+/// Admin menu, backed by six local files instead of one monolithic
+/// `config.json` (mirroring how the Android app kept `admin.json` /
+/// `lockerConfig.json` on-device rather than bundled, just split further).
 ///
-/// `config.json` is read once at startup (see [initialize], called from
+/// Admin PIN, drop-off PIN, and SMS template each live in their own plain
+/// text file (just the raw value, nothing else — see [AppPaths.adminPwFile]
+/// / [AppPaths.dropoffPinFile] / [AppPaths.smsTemplateFile]); locker sizes
+/// and locker pair mapping each get their own JSON file
+/// ([AppPaths.lockerSizesFile] / [AppPaths.lockerPairMappingFile]).
+/// Everything else (locker address/backend, kiosk mode, cvmain/cvmaster
+/// config dirs, paired locker mode) stays together in `config.json`, same
+/// as before. The split is strict: those five settings are never read
+/// from or written to `config.json`, even as a fallback — only their own
+/// dedicated file is ever touched for them. A pre-split `config.json`
+/// still holding one of those five keys just has it ignored; the key is
+/// dropped the next time `config.json` itself gets rewritten (see
+/// [_loadConfigFile]), but its value is never migrated in.
+///
+/// All six files are read once at startup (see [initialize], called from
 /// `main.dart`), then kept in memory. Every setter below re-validates its
 /// input against the same rule the UI enforces, and only writes the new
-/// value back to `config.json` — leaving a readable record of the current
-/// settings on disk — if it passes. A rejected value never reaches the
-/// file or the in-memory state.
+/// value back to disk — leaving a readable record of the current settings
+/// — if it passes. A rejected value never reaches a file or the in-memory
+/// state. [_persistConfig] always rewrites all six files together on any
+/// change, the same "just rewrite everything" approach the single-file
+/// version of this class already used — simpler and more predictable than
+/// trying to track which one specific file actually needs updating.
 ///
 /// Each window (Admin/Customer) runs its own Flutter engine/isolate, so a
 /// setting changed in one window isn't automatically visible in the
 /// other's in-memory copy. `initialize()` also starts a filesystem watch
-/// on `config.json` (see [_startWatching]), so a change saved in one
-/// window is picked up and reflected in the other within moments, without
-/// needing a restart.
+/// on all six files (see [_startWatching]), sharing one debounce so a
+/// burst of changes across several of them collapses into a single
+/// reload — so a change saved in one window is picked up and reflected in
+/// the other within moments, without needing a restart.
 ///
 /// Extends `ChangeNotifier` so dependents (`MockKioskRepository`'s locker
 /// inventory, and any widget listening directly) can react live both to
@@ -139,17 +157,21 @@ class ConfigService extends ChangeNotifier {
   bool _initialized = false;
 
   // --- config.json keys and defaults ----------------------------------
-  static const String _kAdminPin = 'admin_pin';
-  static const String _kDropOffPin = 'drop_off_pin';
-  static const String _kSmsTemplate = 'sms_template';
-  static const String _kLockerMapping = 'locker_mapping';
+  //
+  // Only these six keys are ever read from or written to config.json.
+  // admin_pin/drop_off_pin/sms_template/locker_mapping/
+  // locker_pair_mappings are NOT read from or written to config.json
+  // anymore, even as a fallback — each is exclusively backed by its own
+  // file (see AppPaths). If an old config.json still has one of those
+  // five keys sitting in it, it's simply ignored; it gets dropped the
+  // next time config.json itself is rewritten (see [_loadConfigFile]'s
+  // `configNeedsRewrite`), but its value is never read into memory.
   static const String _kLockerAddress = 'locker_address';
   static const String _kLockerBackend = 'locker_backend';
   static const String _kKioskMode = 'kiosk_mode';
   static const String _kCvmainConfigDir = 'cvmain_config_dir';
   static const String _kCvmasterConfigDir = 'cvmaster_config_dir';
   static const String _kPairedLockerMode = 'paired_locker_mode';
-  static const String _kLockerPairMappings = 'locker_pair_mappings';
 
   static const String _defaultAdminPin = '12345';
   static const String _defaultDropOffPin = '12345';
@@ -235,10 +257,10 @@ class ConfigService extends ChangeNotifier {
   bool _pairedLockerMode = _defaultPairedLockerMode;
   List<LockerPairMapping> _lockerPairMappings = _defaultLockerPairMappings;
 
-  StreamSubscription<FileSystemEvent>? _watchSubscription;
+  final List<StreamSubscription<FileSystemEvent>> _watchSubscriptions = [];
 
   /// How long to wait for the filesystem to go quiet before actually
-  /// reloading `config.json` off a watch event — see [_startWatching].
+  /// reloading off a watch event — see [_startWatching].
   static const _reloadDebounce = Duration(seconds: 2, milliseconds: 500);
   Timer? _reloadDebounceTimer;
 
@@ -287,14 +309,24 @@ class ConfigService extends ChangeNotifier {
   /// matters more on slower storage (e.g. an SD card) than it would on a
   /// dev machine's SSD.
   void _startWatching() {
-    try {
-      _watchSubscription = _configFile.watch().listen((_) {
-        _reloadDebounceTimer?.cancel();
-        _reloadDebounceTimer =
-            Timer(_reloadDebounce, _reloadFromDiskAndNotify);
-      });
-    } catch (e) {
-      logger.w('Could not watch config.json for external changes: $e');
+    final filesToWatch = <File>[
+      _configFile,
+      AppPaths.adminPwFile,
+      AppPaths.dropoffPinFile,
+      AppPaths.smsTemplateFile,
+      AppPaths.lockerSizesFile,
+      AppPaths.lockerPairMappingFile,
+    ];
+    for (final file in filesToWatch) {
+      try {
+        _watchSubscriptions.add(file.watch().listen((_) {
+          _reloadDebounceTimer?.cancel();
+          _reloadDebounceTimer =
+              Timer(_reloadDebounce, _reloadFromDiskAndNotify);
+        }));
+      } catch (e) {
+        logger.w('Could not watch ${file.path} for external changes: $e');
+      }
     }
   }
 
@@ -306,22 +338,35 @@ class ConfigService extends ChangeNotifier {
   @override
   void dispose() {
     _reloadDebounceTimer?.cancel();
-    _watchSubscription?.cancel();
+    for (final sub in _watchSubscriptions) {
+      sub.cancel();
+    }
     super.dispose();
   }
 
-  /// Loads settings from `config.json`, creating the file with defaults if
-  /// it doesn't exist yet, and back-filling any keys missing from an older
-  /// copy of the file so it's always self-consistent.
+  /// Loads every setting from its own file — `config.json` for the six
+  /// that stayed there, and the five dedicated files (see `AppPaths`) for
+  /// the rest — creating any that don't exist yet with defaults. Strictly
+  /// separated: `config.json` is only ever read for its six keys, and the
+  /// five split-out settings are only ever read from their own dedicated
+  /// file — never from `config.json`, not even as a fallback. A value
+  /// still sitting under an old key in `config.json` (e.g. `admin_pin`
+  /// from before this split) is simply never looked at.
+  ///
+  /// Deliberately more fault-isolated than the old single-file version:
+  /// each of the five split-out settings is read independently (see
+  /// [_loadPlainTextSetting]/[_loadLockerMapping]/
+  /// [_loadLockerPairMappings]), so a corrupted `locker_sizes.json`, say,
+  /// falls back to defaults and gets rewritten on its own without
+  /// affecting `admin_pw`/`sms_template`/anything else.
   Future<void> _loadConfigFile() async {
     try {
+      var configNeedsRewrite = false;
+
       final file = _configFile;
       if (await file.exists()) {
         final json =
             jsonDecode(await file.readAsString()) as Map<String, dynamic>;
-        _adminPin = json[_kAdminPin] as String? ?? _defaultAdminPin;
-        _dropOffPin = json[_kDropOffPin] as String? ?? _defaultDropOffPin;
-        _smsTemplate = json[_kSmsTemplate] as String? ?? _defaultSmsTemplate;
         _lockerAddress =
             json[_kLockerAddress] as String? ?? _defaultLockerAddress;
         _cvmainConfigDir =
@@ -329,56 +374,27 @@ class ConfigService extends ChangeNotifier {
         _cvmasterConfigDir =
             json[_kCvmasterConfigDir] as String? ?? _defaultCvmasterConfigDir;
 
-        // Note: a `board_locker_counts` key from an older config.json is no
-        // longer read at all (the board-layout feature it drove was
-        // removed) — it's simply absent from the recognized-key list
-        // below, so its presence on an old file makes `json.length`
-        // mismatch and triggers the same self-healing `needsRewrite` path
-        // every other schema migration on this page already uses; the key
-        // is then dropped for good on the next `_persistConfig()`.
-        var needsRewrite = json.length != 11 ||
-            !json.containsKey(_kAdminPin) ||
-            !json.containsKey(_kDropOffPin) ||
-            !json.containsKey(_kSmsTemplate) ||
-            !json.containsKey(_kLockerMapping) ||
+        // Only these 6 keys belong in config.json now. Any other key
+        // present (e.g. a pre-split config.json's admin_pin/drop_off_pin/
+        // sms_template/locker_mapping/locker_pair_mappings) is never read
+        // — its value is ignored — but its presence does mean config.json
+        // needs rewriting to drop it down to just these 6 keys.
+        configNeedsRewrite = json.length != 6 ||
             !json.containsKey(_kLockerAddress) ||
             !json.containsKey(_kLockerBackend) ||
             !json.containsKey(_kKioskMode) ||
             !json.containsKey(_kCvmainConfigDir) ||
             !json.containsKey(_kCvmasterConfigDir) ||
-            !json.containsKey(_kPairedLockerMode) ||
-            !json.containsKey(_kLockerPairMappings);
+            !json.containsKey(_kPairedLockerMode);
 
         final rawPairedMode = json[_kPairedLockerMode];
         _pairedLockerMode =
             rawPairedMode is bool ? rawPairedMode : _defaultPairedLockerMode;
-        if (rawPairedMode is! bool) needsRewrite = true;
-
-        final rawPairMappings = json[_kLockerPairMappings];
-        if (rawPairMappings is List) {
-          if (rawPairMappings.isEmpty) {
-            _lockerPairMappings = _defaultLockerPairMappings;
-          } else {
-            final parsedPairs =
-                rawPairMappings.map(LockerPairMapping.tryFromJson).toList();
-            if (parsedPairs.every((e) => e != null)) {
-              _lockerPairMappings = parsedPairs.cast<LockerPairMapping>();
-            } else {
-              // Malformed entries — fall back to empty rather than risk
-              // acting on a half-parsed pairing (unlocking the wrong
-              // physical door).
-              _lockerPairMappings = _defaultLockerPairMappings;
-              needsRewrite = true;
-            }
-          }
-        } else {
-          _lockerPairMappings = _defaultLockerPairMappings;
-          if (rawPairMappings != null) needsRewrite = true;
-        }
+        if (rawPairedMode is! bool) configNeedsRewrite = true;
 
         final rawKioskMode = json[_kKioskMode];
         _kioskMode = rawKioskMode is bool ? rawKioskMode : _defaultKioskMode;
-        if (rawKioskMode is! bool) needsRewrite = true;
+        if (rawKioskMode is! bool) configNeedsRewrite = true;
 
         final rawBackend = json[_kLockerBackend];
         if (rawBackend is String && _validLockerBackends.contains(rawBackend)) {
@@ -387,60 +403,186 @@ class ConfigService extends ChangeNotifier {
           // Missing (older config.json) or invalid — fall back to 'mock'
           // rather than silently trying to reach hardware nobody configured.
           _lockerBackend = _defaultLockerBackend;
-          needsRewrite = true;
-        }
-
-        final rawMapping = json[_kLockerMapping];
-        if (rawMapping is List) {
-          final parsed =
-              rawMapping.map(LockerMappingEntry.tryFromJson).toList();
-          if (parsed.isNotEmpty && parsed.every((e) => e != null)) {
-            _lockerMapping = parsed.cast<LockerMappingEntry>();
-          } else {
-            // Malformed entries (bad id/size) — fall back to the default
-            // shape and rewrite the file so it's valid going forward.
-            _lockerMapping = _defaultLockerMapping;
-            needsRewrite = true;
-          }
-        } else {
-          // Old format (a bare count/string like "6", or missing entirely)
-          // — migrate to the structured id/size list.
-          _lockerMapping = _defaultLockerMapping;
-          needsRewrite = true;
-          if (rawMapping != null) {
-            logger.i(
-              'Migrating locker_mapping from old format ($rawMapping) to '
-              'structured id/size list.',
-            );
-          }
-        }
-
-        if (needsRewrite) {
-          await _persistConfig();
+          configNeedsRewrite = true;
         }
       } else {
+        configNeedsRewrite = true;
+      }
+
+      final adminPinResult = await _loadPlainTextSetting(
+        AppPaths.adminPwFile,
+        fallback: _defaultAdminPin,
+      );
+      _adminPin = adminPinResult.value;
+      var filesNeedRewrite = adminPinResult.needsRewrite;
+
+      final dropOffPinResult = await _loadPlainTextSetting(
+        AppPaths.dropoffPinFile,
+        fallback: _defaultDropOffPin,
+      );
+      _dropOffPin = dropOffPinResult.value;
+      if (dropOffPinResult.needsRewrite) filesNeedRewrite = true;
+
+      final smsTemplateResult = await _loadPlainTextSetting(
+        AppPaths.smsTemplateFile,
+        fallback: _defaultSmsTemplate,
+      );
+      _smsTemplate = smsTemplateResult.value;
+      if (smsTemplateResult.needsRewrite) filesNeedRewrite = true;
+
+      final lockerMappingResult = await _loadLockerMapping();
+      _lockerMapping = lockerMappingResult.value;
+      if (lockerMappingResult.needsRewrite) filesNeedRewrite = true;
+
+      final pairMappingResult = await _loadLockerPairMappings();
+      _lockerPairMappings = pairMappingResult.value;
+      if (pairMappingResult.needsRewrite) filesNeedRewrite = true;
+
+      if (configNeedsRewrite || filesNeedRewrite) {
         await _persistConfig();
       }
     } catch (e) {
-      logger.w('Failed to load config.json, falling back to defaults: $e');
+      logger.w('Failed to load config, falling back to defaults: $e');
     }
   }
 
+  /// Reads a plain-text setting — just [file]'s raw content, trimmed — for
+  /// `admin_pw`/`dropoff_pin`/`sms_template`. [file] is the *only* source
+  /// read here — no fallback to `config.json` — so if [file] doesn't
+  /// exist or is empty, this returns [fallback] straight away.
+  /// `needsRewrite` is true whenever the returned value didn't come from
+  /// [file] itself — i.e. [file] needs to be (re)written so it actually
+  /// holds this value going forward.
+  Future<({String value, bool needsRewrite})> _loadPlainTextSetting(
+    File file, {
+    required String fallback,
+  }) async {
+    try {
+      if (await file.exists()) {
+        final content = (await file.readAsString()).trim();
+        if (content.isNotEmpty) {
+          return (value: content, needsRewrite: false);
+        }
+      }
+    } catch (e) {
+      logger.w('Failed to read ${file.path}: $e');
+    }
+    return (value: fallback, needsRewrite: true);
+  }
+
+  /// Same idea as [_loadPlainTextSetting], for `locker_sizes.json` — reads
+  /// the JSON array directly from [AppPaths.lockerSizesFile] (a top-level
+  /// array, not nested under a `locker_mapping` key the way it was inside
+  /// `config.json`). That file is the only source read here — no fallback
+  /// to `config.json` — so a missing/empty/malformed file just falls back
+  /// straight to [_defaultLockerMapping].
+  Future<({List<LockerMappingEntry> value, bool needsRewrite})>
+      _loadLockerMapping() async {
+    dynamic raw;
+    try {
+      final file = AppPaths.lockerSizesFile;
+      if (await file.exists()) {
+        raw = jsonDecode(await file.readAsString());
+      }
+    } catch (e) {
+      logger.w('Failed to read ${AppPaths.lockerSizesFile.path}: $e');
+    }
+
+    if (raw == null) {
+      return (value: _defaultLockerMapping, needsRewrite: true);
+    }
+
+    if (raw is List) {
+      final parsed = raw.map(LockerMappingEntry.tryFromJson).toList();
+      if (parsed.isNotEmpty && parsed.every((e) => e != null)) {
+        return (
+          value: parsed.cast<LockerMappingEntry>(),
+          needsRewrite: false,
+        );
+      }
+      // Malformed entries (bad id/size) — fall back to the default shape
+      // and rewrite the file so it's valid going forward.
+      return (value: _defaultLockerMapping, needsRewrite: true);
+    }
+
+    // Old bare count/string format (e.g. "6") — not something this file
+    // should ever hold; fall back and rewrite it to the structured shape.
+    logger.w(
+      'locker_sizes.json had an unexpected shape ($raw) — falling back to '
+      'defaults.',
+    );
+    return (value: _defaultLockerMapping, needsRewrite: true);
+  }
+
+  /// Same idea as [_loadLockerMapping], for `locker_pair_mapping.json` —
+  /// that file is the only source read here, no fallback to `config.json`.
+  Future<({List<LockerPairMapping> value, bool needsRewrite})>
+      _loadLockerPairMappings() async {
+    dynamic raw;
+    try {
+      final file = AppPaths.lockerPairMappingFile;
+      if (await file.exists()) {
+        raw = jsonDecode(await file.readAsString());
+      }
+    } catch (e) {
+      logger.w('Failed to read ${AppPaths.lockerPairMappingFile.path}: $e');
+    }
+
+    if (raw == null) {
+      return (value: _defaultLockerPairMappings, needsRewrite: true);
+    }
+
+    if (raw is List) {
+      if (raw.isEmpty) {
+        return (value: _defaultLockerPairMappings, needsRewrite: false);
+      }
+      final parsed = raw.map(LockerPairMapping.tryFromJson).toList();
+      if (parsed.every((e) => e != null)) {
+        return (
+          value: parsed.cast<LockerPairMapping>(),
+          needsRewrite: false,
+        );
+      }
+      // Malformed entries — fall back to empty rather than risk acting on
+      // a half-parsed pairing (unlocking the wrong physical door).
+      logger.w(
+        'locker_pair_mapping.json has malformed entries — falling back to '
+        'empty.',
+      );
+    }
+    return (value: _defaultLockerPairMappings, needsRewrite: true);
+  }
+
+  /// Rewrites all six files this class owns — `config.json` (the six
+  /// settings that stayed there) plus the five dedicated files — every
+  /// time any setting changes, the same "just rewrite everything" approach
+  /// the single-file version of this class already used for `config.json`
+  /// alone. Simpler and more predictable than tracking exactly which one
+  /// file a given setter actually needs to touch.
   Future<void> _persistConfig() async {
     await AppPaths.ensureDirectoryExists();
+
     await _configFile.writeAsString(const JsonEncoder.withIndent('  ').convert({
-      _kAdminPin: _adminPin,
-      _kDropOffPin: _dropOffPin,
-      _kSmsTemplate: _smsTemplate,
-      _kLockerMapping: _lockerMapping.map((e) => e.toJson()).toList(),
       _kLockerAddress: _lockerAddress,
       _kLockerBackend: _lockerBackend,
       _kKioskMode: _kioskMode,
       _kCvmainConfigDir: _cvmainConfigDir,
       _kCvmasterConfigDir: _cvmasterConfigDir,
       _kPairedLockerMode: _pairedLockerMode,
-      _kLockerPairMappings: _lockerPairMappings.map((e) => e.toJson()).toList(),
     }));
+
+    await AppPaths.adminPwFile.writeAsString(_adminPin);
+    await AppPaths.dropoffPinFile.writeAsString(_dropOffPin);
+    await AppPaths.smsTemplateFile.writeAsString(_smsTemplate);
+    await AppPaths.lockerSizesFile.writeAsString(
+      const JsonEncoder.withIndent('  ')
+          .convert(_lockerMapping.map((e) => e.toJson()).toList()),
+    );
+    await AppPaths.lockerPairMappingFile.writeAsString(
+      const JsonEncoder.withIndent('  ')
+          .convert(_lockerPairMappings.map((e) => e.toJson()).toList()),
+    );
+
     notifyListeners();
   }
 
