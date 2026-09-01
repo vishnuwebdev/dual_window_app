@@ -73,7 +73,7 @@ class LockerPairMapping {
   /// collected.
   final int collectionLockerId;
 
-  /// Optional display-only id an admin assigns to this *pair*, shown to the
+  /// Display-only id an admin assigns to this *pair*, shown to the
   /// customer instead of [dropoffLockerId]/[collectionLockerId] on the
   /// Drop-off/Collection journey screens — see
   /// `MockKioskRepository.lockerDisplayLabel`. Purely cosmetic: every other
@@ -81,9 +81,19 @@ class LockerPairMapping {
   /// admin's Locker Management table, gRPC's own locker_num, audit logs)
   /// keeps using the real [dropoffLockerId]/[collectionLockerId] exactly as
   /// before — this field is never read anywhere except that one display
-  /// lookup. `null` (the default) means "no custom id set," in which case
-  /// the real locker id is still shown, unchanged from before this field
-  /// existed.
+  /// lookup.
+  ///
+  /// Required as of 2026-09-01: every pair an admin saves must carry a
+  /// custom locker id — [validateLockerPairMappings] rejects any pair
+  /// where this is `null`, and `ConfigurationPage` won't let an admin add
+  /// a pending pair without typing one first. The type stays nullable
+  /// (rather than a plain `int`) purely so [tryFromJson] can still parse
+  /// a `locker_pair_mapping.json` written before this requirement existed
+  /// instead of discarding the whole list (see the "malformed entries"
+  /// fallback in `ConfigService._loadLockerPairMappings`) — an admin who
+  /// re-opens Configuration with such a file loaded will see those legacy
+  /// pairs' custom id blank and must fill it in before Save accepts them
+  /// again.
   final int? customLockerId;
 
   Map<String, dynamic> toJson() => {
@@ -97,9 +107,11 @@ class LockerPairMapping {
     final dropoffLockerId = raw['dropoffLockerId'];
     final collectionLockerId = raw['collectionLockerId'];
     if (dropoffLockerId is! int || collectionLockerId is! int) return null;
-    // Missing from an older config.json (written before this field
-    // existed) or not an int — both just mean "no custom id," not a
-    // parse failure, so the whole pairing isn't rejected over it.
+    // Missing from an older config.json (written before this field was
+    // required) or not an int — treated as "no custom id" for parsing
+    // purposes so the whole pairing isn't rejected over it; `null` here
+    // is now caught later by `validateLockerPairMappings`, which requires
+    // every pair to have one before it can be saved.
     final rawCustomLockerId = raw['customLockerId'];
     final customLockerId =
         rawCustomLockerId is int ? rawCustomLockerId : null;
@@ -667,9 +679,10 @@ class ConfigService extends ChangeNotifier {
   ///   [totalLockers] is odd, one locker is allowed to stay unpaired
   ///   (there's no way to pair an odd number of lockers up completely).
   ///   Any *more* than that one leftover is rejected.
-  /// - A [LockerPairMapping.customLockerId], if set, must be unique across
-  ///   pairs — two different physical pairs showing the same custom label
-  ///   to customers would be ambiguous (which one does "Locker 5" mean?).
+  /// - A [LockerPairMapping.customLockerId] is required on every pair (see
+  ///   its doc comment) and must be unique across pairs — two different
+  ///   physical pairs showing the same custom label to customers would be
+  ///   ambiguous (which one does "Locker 5" mean?).
   static String? validateLockerPairMappings(
       List<LockerPairMapping> pairs, int totalLockers) {
     if (totalLockers == 0) {
@@ -698,7 +711,12 @@ class ConfigService extends ChangeNotifier {
         return 'Locker ${pair.collectionLockerId} is used in more than one pair.';
       }
       final customLockerId = pair.customLockerId;
-      if (customLockerId != null && !usedCustomIds.add(customLockerId)) {
+      if (customLockerId == null) {
+        return 'Locker ${pair.dropoffLockerId} \u2194 '
+            '${pair.collectionLockerId} is missing a custom locker id — it '
+            'is required for every pair.';
+      }
+      if (!usedCustomIds.add(customLockerId)) {
         return 'Custom locker id $customLockerId is used by more than one '
             'pair.';
       }

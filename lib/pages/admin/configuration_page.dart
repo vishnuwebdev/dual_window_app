@@ -48,7 +48,9 @@ class _PendingLockerPair {
   final int collectionId;
 
   /// Mirrors `LockerPairMapping.customLockerId` — see its doc comment.
-  /// `null` means "not set," same meaning as there.
+  /// `null` here only happens for a pair loaded from a legacy
+  /// `locker_pair_mapping.json` written before this field was required;
+  /// `_addPendingPair` never adds a new pending pair with this unset.
   final int? customLockerId;
 }
 
@@ -217,26 +219,28 @@ class _ConfigurationPageState extends State<ConfigurationPage>
       return;
     }
 
-    // Optional — an empty field just means "no custom id," same as before
-    // this feature existed (see `LockerPairMapping.customLockerId`'s doc
-    // comment). Only rejects the *add* when something was actually typed
-    // but isn't a valid whole number, so an admin who never touches this
-    // field is never blocked by it.
+    // Required as of 2026-09-01 — every pair must carry a custom locker
+    // id (see `LockerPairMapping.customLockerId`'s doc comment and
+    // `ConfigService.validateLockerPairMappings`, which rejects a pair
+    // with none at save time regardless of what happens here). Checked
+    // here too so the admin finds out immediately, before even hitting
+    // Save.
     final rawCustomId = _customLockerIdController.text.trim();
-    int? customLockerId;
-    if (rawCustomId.isNotEmpty) {
-      customLockerId = int.tryParse(rawCustomId);
-      if (customLockerId == null) {
-        setState(() => _pairingError = 'Custom locker id must be a whole number.');
-        return;
-      }
-      final alreadyUsed =
-          _pendingPairs.any((p) => p.customLockerId == customLockerId);
-      if (alreadyUsed) {
-        setState(() => _pairingError =
-            'Custom locker id $customLockerId is already used by another pair.');
-        return;
-      }
+    if (rawCustomId.isEmpty) {
+      setState(() => _pairingError = 'Custom locker id is required.');
+      return;
+    }
+    final customLockerId = int.tryParse(rawCustomId);
+    if (customLockerId == null) {
+      setState(() => _pairingError = 'Custom locker id must be a whole number.');
+      return;
+    }
+    final alreadyUsed =
+        _pendingPairs.any((p) => p.customLockerId == customLockerId);
+    if (alreadyUsed) {
+      setState(() => _pairingError =
+          'Custom locker id $customLockerId is already used by another pair.');
+      return;
     }
 
     setState(() {
@@ -707,19 +711,18 @@ class _ConfigurationPageState extends State<ConfigurationPage>
                     ),
                     const SizedBox(height: 10),
                     const Text(
-                      'Custom locker id (optional) — shown to the customer '
+                      'Custom locker id (required) — shown to the customer '
                       'on both the drop-off and collection screens instead '
                       'of the real locker numbers above, so they only ever '
-                      'see one consistent number for this pair. Leave blank '
-                      'to keep showing the real locker id.',
+                      'see one consistent number for this pair.',
                       style: AdminTextStyles.body,
                     ),
                     const SizedBox(height: 8),
                     KeyboardTextField(
                       controller: _customLockerIdController,
                       style: AdminTextStyles.fieldInput,
-                      decoration: AdminInputStyle.fieldDecoration(
-                          hint: 'e.g. 1 (leave blank for no custom id)'),
+                      decoration:
+                          AdminInputStyle.fieldDecoration(hint: 'e.g. 1'),
                     ),
                     const SizedBox(height: 10),
                     OutlinedButton.icon(
