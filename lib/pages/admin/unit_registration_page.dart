@@ -84,7 +84,8 @@ class _UnitRegistrationPageState extends State<UnitRegistrationPage>
     super.initState();
     startInactivityTimer();
     _cvmainDirController = TextEditingController(text: _config.cvmainConfigDir);
-    _cvmasterDirController = TextEditingController(text: _config.cvmasterConfigDir);
+    _cvmasterDirController =
+        TextEditingController(text: _config.cvmasterConfigDir);
   }
 
   @override
@@ -222,7 +223,8 @@ class _UnitRegistrationPageState extends State<UnitRegistrationPage>
         elevation: 0,
         title: const Text(
           'Unit Registration',
-          style: TextStyle(fontFamily: 'Metropolis', fontWeight: FontWeight.w800),
+          style:
+              TextStyle(fontFamily: 'Metropolis', fontWeight: FontWeight.w800),
         ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
@@ -244,14 +246,20 @@ class _UnitRegistrationPageState extends State<UnitRegistrationPage>
                       : AppColors.adminCard,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: _service.isRegistered ? AppColors.teal : AppColors.panelBorder,
+                    color: _service.isRegistered
+                        ? AppColors.teal
+                        : AppColors.panelBorder,
                   ),
                 ),
                 child: Row(
                   children: [
                     Icon(
-                      _service.isRegistered ? Icons.check_circle : Icons.info_outline,
-                      color: _service.isRegistered ? AppColors.teal : Colors.white60,
+                      _service.isRegistered
+                          ? Icons.check_circle
+                          : Icons.info_outline,
+                      color: _service.isRegistered
+                          ? AppColors.teal
+                          : Colors.white60,
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -275,7 +283,8 @@ class _UnitRegistrationPageState extends State<UnitRegistrationPage>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text('Registration code', style: AdminTextStyles.sectionTitle),
+                  const Text('Registration code',
+                      style: AdminTextStyles.sectionTitle),
                   const SizedBox(height: 6),
                   const Text(
                     'Create a unit + registration code on the VaultGroup '
@@ -286,7 +295,8 @@ class _UnitRegistrationPageState extends State<UnitRegistrationPage>
                   KeyboardTextField(
                     controller: _codeController,
                     style: AdminTextStyles.fieldInput,
-                    decoration: AdminInputStyle.fieldDecoration(hint: 'Registration code'),
+                    decoration: AdminInputStyle.fieldDecoration(
+                        hint: 'Registration code'),
                     onSubmitted: (_) => _register(),
                   ),
                   const SizedBox(height: 14),
@@ -299,7 +309,8 @@ class _UnitRegistrationPageState extends State<UnitRegistrationPage>
                           ? const SizedBox(
                               width: 16,
                               height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white),
                             )
                           : const Icon(Icons.how_to_reg),
                       label: const Text('Register'),
@@ -313,7 +324,8 @@ class _UnitRegistrationPageState extends State<UnitRegistrationPage>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text('Manage registration', style: AdminTextStyles.sectionTitle),
+                  const Text('Manage registration',
+                      style: AdminTextStyles.sectionTitle),
                   const SizedBox(height: 10),
                   Row(
                     children: [
@@ -325,27 +337,28 @@ class _UnitRegistrationPageState extends State<UnitRegistrationPage>
                               ? const SizedBox(
                                   width: 16,
                                   height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.teal),
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: AppColors.teal),
                                 )
                               : const Icon(Icons.refresh),
                           label: const Text('Refresh JWT'),
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.redAccent[100],
-                            side: BorderSide(color: Colors.redAccent[100]!),
-                            textStyle: const TextStyle(fontFamily: 'Metropolis', fontWeight: FontWeight.w600),
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                          onPressed: _forget,
-                          icon: const Icon(Icons.delete_outline),
-                          label: const Text('Forget'),
-                        ),
-                      ),
+                      // const SizedBox(width: 12),
+                      // Expanded(
+                      //   child: OutlinedButton.icon(
+                      //     style: OutlinedButton.styleFrom(
+                      //       foregroundColor: Colors.redAccent[100],
+                      //       side: BorderSide(color: Colors.redAccent[100]!),
+                      //       textStyle: const TextStyle(fontFamily: 'Metropolis', fontWeight: FontWeight.w600),
+                      //       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      //       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      //     ),
+                      //     onPressed: _forget,
+                      //     icon: const Icon(Icons.delete_outline),
+                      //     label: const Text('Forget'),
+                      //   ),
+                      // ),
                     ],
                   ),
                 ],
@@ -357,137 +370,147 @@ class _UnitRegistrationPageState extends State<UnitRegistrationPage>
                 _resultMessage!,
                 style: TextStyle(
                   fontFamily: 'Metropolis',
-                  color: _resultIsError ? Colors.redAccent[100] : Colors.greenAccent[400],
+                  color: _resultIsError
+                      ? Colors.redAccent[100]
+                      : Colors.greenAccent[400],
                 ),
               ),
             ],
             if (_showPhysicalUnitSyncSection) ...[
-            const SizedBox(height: 24),
-            AdminSectionCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Text('Physical unit sync', style: AdminTextStyles.sectionTitle),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Registering above only updates this app\'s own copy of '
-                    'auth.json/mq.json — it does NOT make the physical '
-                    'unit show "online" on VaultGroup by itself. This app '
-                    'copies those files into cvmain\'s real config folder '
-                    'automatically — after registering, after a JWT '
-                    'refresh, and whenever the directory below is saved '
-                    '(plain file copy, no special permissions needed, no '
-                    'button to remember to press) — the directory below is '
-                    'already set to this unit\'s confirmed path; only '
-                    'change it if you\'re pointing at a different unit, or '
-                    'clear it to skip mirroring entirely. cvmain\'s and '
-                    'cvmaster\'s config directories below are also what the '
-                    'cloud settings sync (see Configuration page) reads '
-                    'their native config from — no manual action needed '
-                    'there, it pushes automatically on every change.',
-                    style: AdminTextStyles.body,
-                  ),
-                  const SizedBox(height: 14),
-                  const Text('cvmain config directory on the unit', style: AdminTextStyles.sectionTitle),
-                  const SizedBox(height: 8),
-                  KeyboardTextField(
-                    controller: _cvmainDirController,
-                    style: AdminTextStyles.fieldInput,
-                    decoration: AdminInputStyle.fieldDecoration(
-                      hint: 'e.g. /home/pi/cv/cvmain/config — leave blank to skip',
+              const SizedBox(height: 24),
+              AdminSectionCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text('Physical unit sync',
+                        style: AdminTextStyles.sectionTitle),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Registering above only updates this app\'s own copy of '
+                      'auth.json/mq.json — it does NOT make the physical '
+                      'unit show "online" on VaultGroup by itself. This app '
+                      'copies those files into cvmain\'s real config folder '
+                      'automatically — after registering, after a JWT '
+                      'refresh, and whenever the directory below is saved '
+                      '(plain file copy, no special permissions needed, no '
+                      'button to remember to press) — the directory below is '
+                      'already set to this unit\'s confirmed path; only '
+                      'change it if you\'re pointing at a different unit, or '
+                      'clear it to skip mirroring entirely. cvmain\'s and '
+                      'cvmaster\'s config directories below are also what the '
+                      'cloud settings sync (see Configuration page) reads '
+                      'their native config from — no manual action needed '
+                      'there, it pushes automatically on every change.',
+                      style: AdminTextStyles.body,
                     ),
-                    onSubmitted: (_) => _saveSyncSettings(),
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'cvmaster config directory on the unit (unconfirmed — '
-                    'a guess based on the cvmain path above; correct it '
-                    'once verified on this Pi)',
-                    style: AdminTextStyles.sectionTitle,
-                  ),
-                  const SizedBox(height: 8),
-                  KeyboardTextField(
-                    controller: _cvmasterDirController,
-                    style: AdminTextStyles.fieldInput,
-                    decoration: AdminInputStyle.fieldDecoration(
-                      hint: 'e.g. /home/pi/cv/cvmaster/config — leave blank to skip',
+                    const SizedBox(height: 14),
+                    const Text('cvmain config directory on the unit',
+                        style: AdminTextStyles.sectionTitle),
+                    const SizedBox(height: 8),
+                    KeyboardTextField(
+                      controller: _cvmainDirController,
+                      style: AdminTextStyles.fieldInput,
+                      decoration: AdminInputStyle.fieldDecoration(
+                        hint:
+                            'e.g. /home/pi/cv/cvmain/config — leave blank to skip',
+                      ),
+                      onSubmitted: (_) => _saveSyncSettings(),
                     ),
-                    onSubmitted: (_) => _saveSyncSettings(),
-                  ),
-                  const SizedBox(height: 14),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.adminFieldFill,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.panelBorder),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'cvmaster config directory on the unit (unconfirmed — '
+                      'a guess based on the cvmain path above; correct it '
+                      'once verified on this Pi)',
+                      style: AdminTextStyles.sectionTitle,
                     ),
-                    child: const Text(
-                      'After the files are copied, a separate process on '
-                      'the unit watches this directory and restarts '
-                      'cvmain on its own so it picks up the change — '
-                      'nothing further to do here. Check '
-                      'cv/cvmain/logs/cvmain.log to confirm, then check '
-                      'VaultGroup\'s dashboard.',
-                      style: TextStyle(fontFamily: 'Metropolis', fontSize: 12, color: Colors.white70),
+                    const SizedBox(height: 8),
+                    KeyboardTextField(
+                      controller: _cvmasterDirController,
+                      style: AdminTextStyles.fieldInput,
+                      decoration: AdminInputStyle.fieldDecoration(
+                        hint:
+                            'e.g. /home/pi/cv/cvmaster/config — leave blank to skip',
+                      ),
+                      onSubmitted: (_) => _saveSyncSettings(),
                     ),
-                  ),
-                  const SizedBox(height: 14),
-                  OutlinedButton(
-                    style: AdminInputStyle.outlinedButton,
-                    onPressed: _saveSyncSettings,
-                    child: const Text('Save directory'),
-                  ),
-                  if (_syncSavedMessage != null) ...[
-                    const SizedBox(height: 10),
-                    Text(
-                      _syncSavedMessage!,
-                      style: const TextStyle(fontFamily: 'Metropolis', color: Colors.white70),
+                    const SizedBox(height: 14),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.adminFieldFill,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColors.panelBorder),
+                      ),
+                      child: const Text(
+                        'After the files are copied, a separate process on '
+                        'the unit watches this directory and restarts '
+                        'cvmain on its own so it picks up the change — '
+                        'nothing further to do here. Check '
+                        'cv/cvmain/logs/cvmain.log to confirm, then check '
+                        'VaultGroup\'s dashboard.',
+                        style: TextStyle(
+                            fontFamily: 'Metropolis',
+                            fontSize: 12,
+                            color: Colors.white70),
+                      ),
                     ),
+                    const SizedBox(height: 14),
+                    OutlinedButton(
+                      style: AdminInputStyle.outlinedButton,
+                      onPressed: _saveSyncSettings,
+                      child: const Text('Save directory'),
+                    ),
+                    if (_syncSavedMessage != null) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        _syncSavedMessage!,
+                        style: const TextStyle(
+                            fontFamily: 'Metropolis', color: Colors.white70),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
             ],
-            const SizedBox(height: 16),
-            AdminSectionCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Text('Factory reset', style: AdminTextStyles.sectionTitle),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Clears this app\'s local registration, and overwrites '
-                    'the physical unit\'s real auth.json and mq/mq.json '
-                    '(in the cvmain config directory above) with its '
-                    'factory "auth.json-reset"/"mq.json-reset" template '
-                    'files. Use this to fully unregister the unit before '
-                    're-registering it, or handing it off. cvmain still '
-                    'needs a manual restart afterwards to pick this up.',
-                    style: AdminTextStyles.body,
-                  ),
-                  const SizedBox(height: 14),
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.redAccent[100],
-                      side: BorderSide(color: Colors.redAccent[100]!),
-                      textStyle: const TextStyle(fontFamily: 'Metropolis', fontWeight: FontWeight.w600),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    onPressed: _resetting ? null : _resetToFactoryDefaults,
-                    icon: _resetting
-                        ? SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.redAccent[100]),
-                          )
-                        : const Icon(Icons.restart_alt),
-                    label: const Text('Reset to factory defaults'),
-                  ),
-                ],
-              ),
-            ),
+            // const SizedBox(height: 16),
+            // AdminSectionCard(
+            //   child: Column(
+            //     crossAxisAlignment: CrossAxisAlignment.stretch,
+            //     children: [
+            //       const Text('Factory reset', style: AdminTextStyles.sectionTitle),
+            //       const SizedBox(height: 6),
+            //       const Text(
+            //         'Clears this app\'s local registration, and overwrites '
+            //         'the physical unit\'s real auth.json and mq/mq.json '
+            //         '(in the cvmain config directory above) with its '
+            //         'factory "auth.json-reset"/"mq.json-reset" template '
+            //         'files. Use this to fully unregister the unit before '
+            //         're-registering it, or handing it off. cvmain still '
+            //         'needs a manual restart afterwards to pick this up.',
+            //         style: AdminTextStyles.body,
+            //       ),
+            //       const SizedBox(height: 14),
+            //       OutlinedButton.icon(
+            //         style: OutlinedButton.styleFrom(
+            //           foregroundColor: Colors.redAccent[100],
+            //           side: BorderSide(color: Colors.redAccent[100]!),
+            //           textStyle: const TextStyle(fontFamily: 'Metropolis', fontWeight: FontWeight.w600),
+            //           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            //           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            //         ),
+            //         onPressed: _resetting ? null : _resetToFactoryDefaults,
+            //         icon: _resetting
+            //             ? SizedBox(
+            //                 width: 16,
+            //                 height: 16,
+            //                 child: CircularProgressIndicator(strokeWidth: 2, color: Colors.redAccent[100]),
+            //               )
+            //             : const Icon(Icons.restart_alt),
+            //         label: const Text('Reset to factory defaults'),
+            //       ),
+            //     ],
+            //   ),
+            // ),
           ],
         ),
       ),
