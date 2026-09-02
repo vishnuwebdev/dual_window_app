@@ -26,8 +26,10 @@ import 'models.dart';
 /// `LockerService.updateLockerConfig` regenerating `lockerConfig.json`.
 ///
 /// Every parcel "ticket" (`_items`) is persisted to a local `db.json` next
-/// to the app, in the same `{phone, pin, lockerId, creationDate}` shape as
-/// the Android app's `db.json` (written by `DbService`) — so a drop-off
+/// to the app, in the same `{phone, pin, dropoffLockerId, creationDate}` shape (the
+/// `lockerId` field is stored on disk as `dropoffLockerId`, matching
+/// `ConfigService.lockerPairMappings`'s naming) as the Android app's
+/// `db.json` (written by `DbService`) — so a drop-off
 /// survives an app restart and can be inspected the same way as on the
 /// physical kiosk. Loaded once at startup (see [initialize], called from
 /// `main.dart`), then kept in memory and written straight through on every
@@ -325,7 +327,7 @@ class MockKioskRepository extends ChangeNotifier {
   static Map<String, dynamic> _itemToJson(LockerItem item) => {
         'phone': item.phone,
         'pin': item.pin,
-        'lockerId': item.lockerId,
+        'dropoffLockerId': item.lockerId,
         // Only present (non-null) for a parcel dropped off while paired
         // mode was on — see `LockerItem.collectionLockerId`'s doc comment
         // for why this is frozen here rather than recomputed on read.
@@ -337,7 +339,7 @@ class MockKioskRepository extends ChangeNotifier {
     if (raw is! Map) return null;
     final phone = raw['phone'];
     final pin = raw['pin'];
-    final lockerId = raw['lockerId'];
+    final lockerId = raw['dropoffLockerId'];
     final collectionLockerId = raw['collectionLockerId'];
     final creationDateRaw = raw['creationDate'];
     if (phone is! String ||
