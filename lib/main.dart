@@ -7,6 +7,7 @@ import 'core/config/config_service.dart';
 import 'core/mock/mock_kiosk_repository.dart';
 import 'core/registration/auto_sync_service.dart';
 import 'core/registration/mqtt_sync_service.dart';
+import 'core/registration/token_refresh_service.dart';
 import 'core/registration/unit_registration_service.dart';
 import 'models/window_type.dart';
 import 'services/messaging_service.dart';
@@ -93,6 +94,13 @@ Future<void> _runAdminWindow() async {
   // only" reasoning as MqttSyncService above. Synchronous (just registers
   // listeners), so no need for `unawaited`.
   AutoSyncService.instance.start();
+
+  // Keeps the MQTT JWT in `mq.json` from going stale between manual
+  // "Refresh JWT" clicks — see TokenRefreshService's class doc comment.
+  // Same "one owner, Admin window only" reasoning as MqttSyncService/
+  // AutoSyncService above. Synchronous (just fires the first refresh
+  // fire-and-forget and starts a timer), so no need for `unawaited`.
+  TokenRefreshService.instance.start();
 }
 
 Future<void> _runCustomerWindow() async {

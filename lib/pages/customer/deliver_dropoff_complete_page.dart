@@ -12,10 +12,12 @@ class DeliverDropoffCompletePage extends StatefulWidget {
   const DeliverDropoffCompletePage({super.key});
 
   @override
-  State<DeliverDropoffCompletePage> createState() => _DeliverDropoffCompletePageState();
+  State<DeliverDropoffCompletePage> createState() =>
+      _DeliverDropoffCompletePageState();
 }
 
-class _DeliverDropoffCompletePageState extends State<DeliverDropoffCompletePage> {
+class _DeliverDropoffCompletePageState
+    extends State<DeliverDropoffCompletePage> {
   Timer? _timer;
 
   @override
@@ -54,8 +56,7 @@ class _DeliverDropoffCompletePageState extends State<DeliverDropoffCompletePage>
           ),
           alignment: Alignment.center,
           child: const Text(
-            'Drop off complete\n\n'
-            'The recipient will receive a one-time-pin via SMS',
+            'Drop off complete\n\n',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontFamily: 'Metropolis',

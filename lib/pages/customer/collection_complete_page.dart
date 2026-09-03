@@ -2,173 +2,72 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../core/config/config_service.dart';
-import '../../core/grpc/locker_grpc_service.dart';
-import '../../core/mock/mock_kiosk_repository.dart';
-import '../../core/registration/audit_codes.dart';
-import '../../widgets/kiosk/kiosk.dart';
+import '../../core/theme/app_colors.dart';
 
-/// Ported from `CollectionCompleteActivity` /
-/// `activity_collection_complete.xml`: tells the customer which locker(s)
-/// to open, removes the collected item(s) from the mock repository, and
-/// auto-returns to Home after 8 seconds (Android used
-/// `postDelayed(delayMillis = 8000)`).
+/// The collection journey's actual "you're done" confirmation — the
+/// direct equivalent of `DeliverDropoffCompletePage` on the drop-off
+/// side, and new as of 2026-09-03. Before this existed, the collection
+/// journey had no card like this at all: the instruction screen
+/// (`CollectionInstructionPage`, née `CollectionCompletePage` — see its
+/// doc comment for the rename) went straight back to Home once its timer
+/// or Back button fired, with nothing ever telling the customer the
+/// transaction had actually finished. See `collection_instruction_page.dart`
+/// for how this screen is now reachable.
 class CollectionCompletePage extends StatefulWidget {
-  const CollectionCompletePage({
-    super.key,
-    required this.phone,
-    required this.oneTimePin,
-  });
-
-  final String phone;
-  final String oneTimePin;
+  const CollectionCompletePage({super.key});
 
   @override
-  State<CollectionCompletePage> createState() => _CollectionCompletePageState();
+  State<CollectionCompletePage> createState() =>
+      _CollectionCompletePageState();
 }
 
-class _CollectionCompletePageState extends State<CollectionCompletePage>
-    with InactivityTimerMixin {
-  // Android used INACTIVITY_TIMEOUT_HALF_MINUTE + 10s here specifically.
-  @override
-  Duration get inactivityTimeout => const Duration(seconds: 40);
-
-  Timer? _autoReturnTimer;
-  late final List<int> _lockerIds;
-  // Human-facing labels for `_lockerIds`, in the same order — an admin's
-  // custom locker id (in paired mode, when one was set for that pair) or
-  // just the flat id otherwise — see `MockKioskRepository.lockerDisplayLabel`.
-  // The raw flat id is what `unlock_locker` actually receives (used for
-  // `_lockerIds` itself and the audit log below), but it's not necessarily
-  // the number the customer should recognize, so the on-screen message uses
-  // these instead.
-  late final List<String> _lockerLabels;
-  bool _navigated = false;
+class _CollectionCompletePageState extends State<CollectionCompletePage> {
+  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
-    startInactivityTimer();
-
-    final repo = MockKioskRepository.instance;
-    final matches = repo
-        .itemsForPhone(widget.phone)
-        .where((item) => item.pin == widget.oneTimePin)
-        .toList();
-    // The door that actually unlocks on collection is
-    // `collectionLockerId` (the paired board's door) when paired mode was
-    // on at drop-off time, not `lockerId` (the drop-off door itself) — see
-    // `MockKioskRepository.removeItems`. The customer must be told the
-    // door that's really opening, not the one they used to drop it off.
-    _lockerIds = matches
-        .map((item) => item.collectionLockerId ?? item.lockerId)
-        .toList()
-      ..sort();
-    _lockerLabels = _lockerIds.map(repo.lockerDisplayLabel).toList();
-    final customLockerIdsJson =
-        _lockerIds.map((id) => repo.customLockerIdFor(id) ?? 'null').join(',');
-
-    // Audit trail mirrors `DbService.removeItem`'s pickup flow. A pin that
-    // matched nothing approximates Android's AUDIT_LOG_PICKUP_WRONG_PIN;
-    // there isn't a distinct call site for that in this port to match
-    // exactly, so this is inferred rather than a direct port.
-    if (ConfigService().isGrpcBackend) {
-      final grpc = LockerGrpcService.instance;
-      if (matches.isNotEmpty) {
-        unawaited(grpc.userAudit(
-          code: AuditCodes.pickupStarted,
-          priority: AuditLogPriority.low,
-          level: AuditLogLevel.info,
-          description: 'Pickup: started',
-          parametersJson: '["${widget.phone}",${_lockerIds.join(",")},'
-              '$customLockerIdsJson]',
-        ));
-        // One "Open/DropOff/Collection/Custom" breakdown per matched item
-        // (almost always exactly one — a PIN identifies a single parcel —
-        // but built from `matches` rather than assuming that, in case more
-        // than one ever shares the same phone+PIN), joined so the
-        // `description` still reads as one line per locker even when
-        // there's more than one. `parametersJson` below also appends each
-        // locker's custom id (`null` when unset), in the same order as
-        // `_lockerIds` — see the matching comment on the drop-off audit
-        // call in `deliver_place_parcel_page.dart`.
-        final lockerDetails = matches.map((item) {
-          final openLockerId = item.collectionLockerId ?? item.lockerId;
-          return repo.lockerAuditDetails(
-            openLockerId: openLockerId,
-            dropOffLockerId: item.lockerId,
-            collectionLockerId: item.collectionLockerId,
-          );
-        }).join('; ');
-        unawaited(grpc.userAudit(
-          code: AuditCodes.pickupSuccess,
-          priority: AuditLogPriority.medium,
-          level: AuditLogLevel.info,
-          description: 'Pickup: success — $lockerDetails',
-          parametersJson: '["${widget.phone}",${_lockerIds.join(",")},'
-              '$customLockerIdsJson]',
-        ));
-      } else {
-        unawaited(grpc.userAudit(
-          code: AuditCodes.pickupWrongPin,
-          priority: AuditLogPriority.normal,
-          level: AuditLogLevel.warning,
-          description: 'Pickup: wrong pin',
-          parametersJson: '["${widget.phone}"]',
-        ));
-      }
-    }
-
-    // Collecting the parcel removes it from the mock repository, freeing
-    // the locker(s) up again — matches `dbService.removeItem(item)`.
-    repo.removeItems(matches);
-
-    _autoReturnTimer = Timer(const Duration(seconds: 8), _returnHome);
-  }
-
-  @override
-  void onInactivityTimeout() => _returnHome();
-
-  void _returnHome() {
-    if (_navigated || !mounted) return;
-    _navigated = true;
-    // Pop back to the existing root `HomePage` route (each window's
-    // `MaterialApp.home`) instead of pushing a fresh one — a fresh
-    // `HomePage()` would use its default `dropOffEnabled`/`collectEnabled`
-    // rather than this window's actual role, showing the wrong buttons.
-    Navigator.of(context).popUntil((route) => route.isFirst);
+    _timer = Timer(const Duration(seconds: 9), () {
+      if (!mounted) return;
+      // Pop back to the existing root `HomePage` route (each window's
+      // `MaterialApp.home`) instead of pushing a fresh one — a fresh
+      // `HomePage()` would use its default `dropOffEnabled`/
+      // `collectEnabled` rather than this window's actual role, showing
+      // the wrong buttons. Same reasoning as
+      // `DeliverDropoffCompletePage`'s matching timer.
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    });
   }
 
   @override
   void dispose() {
-    _autoReturnTimer?.cancel();
+    _timer?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final text = _lockerLabels.length > 1
-        ? 'Please collect your parcels from lockers ${_lockerLabels.join(', ')} and close the locker door once complete'
-        : 'Please collect your parcel from locker ${_lockerLabels.isEmpty ? '-' : _lockerLabels.first} and close the locker door once complete';
-
-    return wrapWithActivityDetector(
-      KioskScaffold(
-        waves: KioskWaves.left,
-        child: Stack(
-          children: [
-            BackImageButton(onPressed: _returnHome),
-            Column(
-              children: [
-                const KioskHeader(),
-                Expanded(
-                  child: Center(
-                    child: InstructionPanel(
-                        text: text, width: 700, height: 380, fontSize: 30),
-                  ),
-                ),
-              ],
+    return Scaffold(
+      backgroundColor: AppColors.deepNavy,
+      body: Center(
+        child: Container(
+          margin: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(32),
+          decoration: BoxDecoration(
+            color: AppColors.deepNavy,
+            border: Border.all(color: AppColors.tealBorder, width: 2),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          alignment: Alignment.center,
+          child: const Text(
+            'Collection completed',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: 'Metropolis',
+              fontSize: 32,
+              color: Colors.white,
             ),
-          ],
+          ),
         ),
       ),
     );

@@ -90,4 +90,19 @@ class AuditCodes {
   static const adminPasswordChangeFailure = 131;
   static const adminPasswordChangeTokenValidationError = 132;
   static const adminPasswordChangeTokenValidationFailure = 133;
+
+  // UNCONFIRMED — added 2026-09 for `TokenRefreshService`'s background
+  // MQTT-JWT refresh (see that class's doc comment). Unlike every other
+  // value in this file, these two are NOT copied from the Android app's
+  // `LogConstants.kt` — that file has no "token refreshed" concept at all,
+  // since on Android the JWT is refreshed as a side effect of other flows
+  // rather than on its own timer. Picked as unused numbers in this file's
+  // existing range rather than reusing any code above, so they don't
+  // collide with an unrelated existing meaning. If VaultGroup's platform
+  // rejects these (e.g. because its backend only accepts codes it already
+  // knows about), or a real matching code turns up in `LogConstants.kt`
+  // later, correct these two to match — see `AuditLogPriority`'s doc
+  // comment above for the same kind of caveat on `AuditLogPriority`.
+  static const authTokenRefreshSuccess = 150;
+  static const authTokenRefreshFailure = 151;
 }

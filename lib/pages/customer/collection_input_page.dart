@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/mock/mock_kiosk_repository.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../widgets/kiosk/kiosk.dart';
-import 'collection_complete_page.dart';
+import 'collection_instruction_page.dart';
 
 /// Ported from `CollectionInputActivity` / `activity_collection_input.xml`:
 /// phone number + one-time PIN entry to retrieve a parcel.
@@ -133,7 +133,7 @@ class _CollectionInputPageState extends State<CollectionInputPage>
     stopInactivityTimer();
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => CollectionCompletePage(phone: phone, oneTimePin: pin),
+        builder: (_) => CollectionInstructionPage(phone: phone, oneTimePin: pin),
       ),
     );
   }

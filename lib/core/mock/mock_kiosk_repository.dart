@@ -824,7 +824,7 @@ class MockKioskRepository extends ChangeNotifier {
 
   /// Human-facing label for [lockerId] — what customer-facing drop-off/
   /// collection screens show instead of the raw flat id (see
-  /// `DeliverPlaceParcelPage`/`CollectionCompletePage`).
+  /// `DeliverPlaceParcelPage`/`CollectionInstructionPage`).
   ///
   /// Previously showed a "Board N, Locker L" label derived from an admin-
   /// entered board layout (see [ConfigService.lockerMapping]'s doc comment
