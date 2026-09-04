@@ -65,7 +65,8 @@ class UnitRegistrationService extends ChangeNotifier {
         if (username is String && username.isNotEmpty) {
           _username = username;
           _isRegistered = true;
-          logger.i('UnitRegistrationService: already registered as "$username".');
+          logger
+              .i('UnitRegistrationService: already registered as "$username".');
         }
       }
     } catch (e) {
@@ -269,8 +270,9 @@ class UnitRegistrationService extends ChangeNotifier {
             '${stderr.isEmpty ? '' : ': $stderr'}';
       }
 
-      logger.i('Mirrored auth.json/mq.json to cvmain config dir via copy_to_cvmain.sh: $dir');
-      return 'Copied auth.json/mq.json to $dir.';
+      logger.i(
+          'Mirrored auth.json/mq.json to cvmain config dir via copy_to_cvmain.sh: $dir');
+      return '';
     } catch (e) {
       logger.w('Failed to run copy_to_cvmain.sh: $e');
       return 'Could not run copy_to_cvmain.sh: $e';
@@ -357,7 +359,8 @@ class UnitRegistrationService extends ChangeNotifier {
             '${result.exitCode})${stderr.isEmpty ? '' : ': $stderr'}';
       }
 
-      logger.i('Reset auth.json/mq.json to factory defaults in cvmain config dir via reset_cvmain.sh: $dir');
+      logger.i(
+          'Reset auth.json/mq.json to factory defaults in cvmain config dir via reset_cvmain.sh: $dir');
       return 'Local registration cleared, and the unit\'s auth.json/mq.json '
           'were reset to their factory defaults in $dir. cvmain still '
           'needs a manual restart to pick this up.';
