@@ -84,7 +84,8 @@ class TokenRefreshService {
 
   static final TokenRefreshService instance = TokenRefreshService._();
 
-  static const _refreshInterval = Duration(hours: 10);
+  // TEST-ONLY: temporarily shortened from `Duration(hours: 10)` to 1 minute to force fast refresh cycles while debugging the JWT auto-refresh/MQTT bad_username_or_password issue. REVERT to `Duration(hours: 10)` before shipping.
+  static const _refreshInterval = Duration(minutes: 1);
 
   bool _started = false;
   Timer? _timer;
@@ -99,7 +100,7 @@ class TokenRefreshService {
     _started = true;
 
     logger.i('TokenRefreshService: started — refreshing now, then every '
-        '${_refreshInterval.inHours}h.');
+        '${_refreshInterval.inMinutes}m.');
     unawaited(_runRefreshCycle(trigger: 'startup'));
     _timer = Timer.periodic(
       _refreshInterval,
@@ -197,7 +198,8 @@ class TokenRefreshService {
       if (exp is! int) return null;
       return DateTime.fromMillisecondsSinceEpoch(exp * 1000, isUtc: true);
     } catch (e) {
-      logger.w('TokenRefreshService: could not decode refreshed JWT expiry: $e');
+      logger
+          .w('TokenRefreshService: could not decode refreshed JWT expiry: $e');
       return null;
     }
   }
