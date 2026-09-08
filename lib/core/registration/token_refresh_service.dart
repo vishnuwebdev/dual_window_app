@@ -85,7 +85,7 @@ class TokenRefreshService {
   static final TokenRefreshService instance = TokenRefreshService._();
 
   // TEST-ONLY: temporarily shortened from `Duration(hours: 10)` to 1 minute to force fast refresh cycles while debugging the JWT auto-refresh/MQTT bad_username_or_password issue. REVERT to `Duration(hours: 10)` before shipping.
-  static const _refreshInterval = Duration(minutes: 1);
+  static const _refreshInterval = Duration(hours: 2);
 
   bool _started = false;
   Timer? _timer;
